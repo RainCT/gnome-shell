@@ -4,6 +4,7 @@ const Big = imports.gi.Big;
 const Clutter = imports.gi.Clutter;
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
+const DBus = imports.dbus;
 const Mainloop = imports.mainloop;
 const Lang = imports.lang;
 const Shell = imports.gi.Shell;
@@ -22,6 +23,31 @@ const STATE_EXPANDING   = 3;
 const STATE_POPPING_OUT = 4;
 const STATE_POPPED_OUT  = 5;
 const STATE_POPPING_IN  = 6;
+
+let bus = DBus.session;
+
+var zeitgeistIface = {
+    name: 'org.gnome.Zeitgeist',
+    methods: [{ name: "GetItems",
+                inSignature: "iiss",
+                outSignature: "a(isssssssbsss)"
+              }
+             ]
+};
+
+function Zeitgeist() {
+    this._init();
+};
+
+Zeitgeist.prototype = {
+     _init: function() {
+         DBus.session.proxifyObject(this, 'org.gnome.Zeitgeist',
+             '/org/gnome/Zeitgeist');
+     }
+};
+
+DBus.proxifyPrototype(Zeitgeist.prototype, zeitgeistIface);
+let zeitgeist = new Zeitgeist();
 
 function Widget() {
 }
@@ -226,64 +252,42 @@ DocsWidget.prototype = {
         this.title = "Recent Docs";
         this.actor = new Big.Box({ spacing: 2 });
 
-        this._recentManager = Gtk.RecentManager.get_default();
-        this._recentManager.connect('changed', Lang.bind(this, this._recentChanged));
-        this._recentChanged();
+        zeitgeist.GetItemsRemote(1244817199, 0, '', '', Lang.bind(this, this._recentChanged));
+        //this._recentManager = Gtk.RecentManager.get_default();
+        //this._recentManager.connect('changed', Lang.bind(this, this._recentChanged));
+        //this._recentChanged();
     },
 
-    _recentChanged: function() {
+    _recentChanged: function(docs, excp) {
         let i, docId;
+        this._items = {};
 
-        this._allItems = {};
-        let docs = this._recentManager.get_items();
+        if (excp) {
+            log('Error fetching recently used items:\n' + excp)
+            return;
+        }
+
         for (i = 0; i < docs.length; i++) {
-            let docInfo = docs[i];
-            let docId = docInfo.get_uri();
-            // we use GtkRecentInfo URI as an item Id
-            this._allItems[docId] = docInfo;
+            let item = docs[i];
+            let docId = item[1];
+            // we use the URI as an item Id
+            this._items[docId] = item;
         }
-
-        this._matchedItems = [];
-        let docIdsToRemove = [];
-        for (docId in this._allItems) {
-            // this._allItems[docId].exists() checks if the resource still exists
-            if (this._allItems[docId].exists())
-                this._matchedItems.push(docId);
-            else
-                docIdsToRemove.push(docId);
-        }
-
-        for (docId in docIdsToRemove) {
-            delete this._allItems[docId];
-        }
-
-        this._matchedItems.sort(Lang.bind(this, function (a,b) { return this._compareItems(a,b); }));
 
         let children = this.actor.get_children();
         for (let c = 0; c < children.length; c++)
             this.actor.remove_actor(children[c]);
 
-        for (i = 0; i < Math.min(this._matchedItems.length, 5); i++) {
+        for (i = 0; i < Math.min(this._items.length, 5); i++) {
             let box = new Big.Box({ padding: 2,
                                     corner_radius: 2 });
-            let docDisplayItem = new DocDisplay.DocDisplayItem(
-                this._allItems[this._matchedItems[i]], EXPANDED_WIDTH);
+            let docDisplayItem = new ZeitgeistDocDisplay.DocDisplayItem(
+                this._items[i], EXPANDED_WIDTH);
             hackUpDisplayItemColors(docDisplayItem);
             box.append(docDisplayItem.actor, Big.BoxPackFlags.NONE);
             this.actor.append(box, Big.BoxPackFlags.NONE);
             docDisplayItem.connect('select', Lang.bind(this, this._itemActivated));
         }
-    },
-
-   _compareItems : function(itemIdA, itemIdB) {
-        let docA = this._allItems[itemIdA];
-        let docB = this._allItems[itemIdB];
-        if (docA.get_modified() > docB.get_modified())
-            return -1;
-        else if (docA.get_modified() < docB.get_modified())
-            return 1;
-        else
-            return 0;
     },
 
     _itemActivated: function(item) {

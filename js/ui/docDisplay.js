@@ -253,3 +253,121 @@ DocDisplay.prototype = {
 };
 
 Signals.addSignalMethods(DocDisplay.prototype);
+
+
+
+function ZeitgeistDocDisplayItem(item, availableWidth) {
+    this._init(item, availableWidth);
+}
+
+ZeitgeistDocDisplayItem.prototype = {
+    __proto__:  GenericDisplay.GenericDisplayItem.prototype,
+
+    _init : function(item, availableWidth) {
+        GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth);     
+        this._item = item;
+    
+        let name = item[2];
+        log(name);
+        
+        // we can possibly display tags in the space for description
+        let description = item[5];
+
+        let icon = new Clutter.Texture();
+        this._iconPixbuf = false; // Shell.get_thumbnail_for_recent_info(item);
+        if (this._iconPixbuf) {
+            // We calculate the width and height of the texture so as to preserve the aspect ratio of the thumbnail.
+            // Because the images generated based on thumbnails don't have an internal padding like system icons do,
+            // we create a slightly smaller texture and then use extra margin when positioning it. 
+            let scalingFactor = (GenericDisplay.ITEM_DISPLAY_ICON_SIZE - ITEM_DISPLAY_ICON_MARGIN * 2) / Math.max(this._iconPixbuf.get_width(), this._iconPixbuf.get_height());
+            icon.set_width(Math.ceil(this._iconPixbuf.get_width() * scalingFactor));
+            icon.set_height(Math.ceil(this._iconPixbuf.get_height() * scalingFactor));
+            Shell.clutter_texture_set_from_pixbuf(icon, this._iconPixbuf);
+            icon.x = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
+            icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;       
+        } else {
+            //Shell.clutter_texture_set_from_pixbuf(icon, item.get_icon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE));
+            //icon.x = GenericDisplay.ITEM_DISPLAY_PADDING;
+            //icon.y = GenericDisplay.ITEM_DISPLAY_PADDING;
+        } 
+
+        this._setItemInfo(name, description, icon);
+    },
+
+    //// Public methods ////
+
+    // Returns the document info associated with this display item.
+    getItem : function() {
+        return this._item;
+    },
+ 
+    //// Public method overrides ////
+
+    // Opens a document represented by this display item.
+    launch : function() {
+        // While using Gio.app_info_launch_default_for_uri() would be shorter
+        // in terms of lines of code, we are not doing so because that would 
+        // duplicate the work of retrieving the mime type.       
+        let mimeType = this._item[4];
+        let appInfo = Gio.app_info_get_default_for_type(mimeType, true);
+
+        if (appInfo != null) {
+            appInfo.launch_uris([this._item[1]], Main.createAppLaunchContext());
+        } else {
+            log("Failed to get default application info for mime type " + mimeType + 
+                ". Will try to use the last application that registered the document."); 
+            let appName = this._item[10];
+            success = false; // let [success, appExec, count, time] = this._item.get_application_info(appName);
+            if (success) {
+                log("Will open a document with the following command: " + appExec);
+                // TODO: Change this once better support for creating GAppInfo is added to 
+                // GtkRecentInfo, as right now this relies on the fact that the file uri is
+                // already a part of appExec, so we don't supply any files to appInfo.launch().
+
+                // The 'command line' passed to create_from_command_line is allowed to contain
+                // '%<something>' macros that are expanded to file name / icon name, etc,
+                // so we need to escape % as %%
+                appExec = appExec.replace(/%/g, "%%");
+
+                let appInfo = Gio.app_info_create_from_commandline(appExec, null, 0, null);
+
+                // The point of passing an app launch context to launch() is mostly to get
+                // startup notification and associated benefits like the app appearing
+                // on the right desktop; but it doesn't really work for now because with
+                // the way we create the appInfo we aren't reading the application's desktop 
+                // file, and thus don't find the StartupNotify=true in it. So, despite passing 
+                // the app launch context, no startup notification occurs.
+                appInfo.launch([], Main.createAppLaunchContext());
+            } else {
+                log("Failed to get application info for " + this._item[1]);
+            }
+        }
+    },
+
+    //// Protected method overrides ////
+
+    // Ensures the preview icon is created.
+    _ensurePreviewIconCreated : function() {
+        if (this._previewIcon)
+            return; 
+
+        this._previewIcon = new Clutter.Texture();
+        if (this._iconPixbuf) {
+            let scalingFactor = (GenericDisplay.PREVIEW_ICON_SIZE / Math.max(this._iconPixbuf.get_width(), this._iconPixbuf.get_height()));
+            this._previewIcon.set_width(Math.ceil(this._iconPixbuf.get_width() * scalingFactor));
+            this._previewIcon.set_height(Math.ceil(this._iconPixbuf.get_height() * scalingFactor));
+            Shell.clutter_texture_set_from_pixbuf(this._previewIcon, this._iconPixbuf);           
+        } else {
+            //Shell.clutter_texture_set_from_pixbuf(this._previewIcon, this._item.get_icon(GenericDisplay.PREVIEW_ICON_SIZE));
+        }
+    },
+
+    // Creates and returns a large preview icon, but only if this._item is an image file
+    // and we were able to generate a pixbuf from it successfully.
+    _createLargePreviewIcon : function(availableWidth, availableHeight) {
+        if (this._item[5] == null || this._item[5].indexOf("image/") != 0)
+            return null;
+
+        return Shell.TextureCache.get_default().load_uri_sync(this._item[1], availableWidth, availableHeight);
+    }
+};
