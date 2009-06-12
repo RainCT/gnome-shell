@@ -266,12 +266,10 @@ ZeitgeistDocDisplayItem.prototype = {
     _init : function(item, availableWidth) {
         GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth);     
         this._item = item;
-    
         let name = item[2];
-        log(name);
         
         // we can possibly display tags in the space for description
-        let description = item[5];
+        let description = item[6];
 
         let icon = new Clutter.Texture();
         this._iconPixbuf = false; // Shell.get_thumbnail_for_recent_info(item);
@@ -286,7 +284,9 @@ ZeitgeistDocDisplayItem.prototype = {
             icon.x = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
             icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;       
         } else {
-            //Shell.clutter_texture_set_from_pixbuf(icon, item.get_icon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE));
+            log(item);
+            //icon.set_from_file(global.imagedir + "remove-workspace.svg");
+            //Shell.clutter_texture_set_from_file(icon, item.get_icon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE));
             //icon.x = GenericDisplay.ITEM_DISPLAY_PADDING;
             //icon.y = GenericDisplay.ITEM_DISPLAY_PADDING;
         } 
@@ -308,7 +308,7 @@ ZeitgeistDocDisplayItem.prototype = {
         // While using Gio.app_info_launch_default_for_uri() would be shorter
         // in terms of lines of code, we are not doing so because that would 
         // duplicate the work of retrieving the mime type.       
-        let mimeType = this._item[4];
+        let mimeType = this._item[5];
         let appInfo = Gio.app_info_get_default_for_type(mimeType, true);
 
         if (appInfo != null) {

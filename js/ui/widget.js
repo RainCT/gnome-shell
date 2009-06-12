@@ -259,30 +259,23 @@ DocsWidget.prototype = {
     },
 
     _recentChanged: function(docs, excp) {
-        let i, docId;
-        this._items = {};
+        let i;
 
         if (excp) {
             log('Error fetching recently used items:\n' + excp)
             return;
         }
 
-        for (i = 0; i < docs.length; i++) {
-            let item = docs[i];
-            let docId = item[1];
-            // we use the URI as an item Id
-            this._items[docId] = item;
-        }
-
         let children = this.actor.get_children();
         for (let c = 0; c < children.length; c++)
             this.actor.remove_actor(children[c]);
-
-        for (i = 0; i < Math.min(this._items.length, 5); i++) {
+       
+        for (i = 0; i < Math.min(docs.length, 5); i++) {
+            log(i);
             let box = new Big.Box({ padding: 2,
                                     corner_radius: 2 });
-            let docDisplayItem = new ZeitgeistDocDisplay.DocDisplayItem(
-                this._items[i], EXPANDED_WIDTH);
+            let docDisplayItem = new DocDisplay.ZeitgeistDocDisplayItem(
+               docs[i], EXPANDED_WIDTH);
             hackUpDisplayItemColors(docDisplayItem);
             box.append(docDisplayItem.actor, Big.BoxPackFlags.NONE);
             this.actor.append(box, Big.BoxPackFlags.NONE);
