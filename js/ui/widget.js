@@ -29,7 +29,7 @@ let bus = DBus.session;
 var zeitgeistIface = {
     name: 'org.gnome.Zeitgeist',
     methods: [{ name: "GetItems",
-                inSignature: "iiss",
+                inSignature: "iiibbss",
                 outSignature: "a(isssssssbsss)"
               }
              ]
@@ -252,7 +252,8 @@ DocsWidget.prototype = {
         this.title = "Recent Docs";
         this.actor = new Big.Box({ spacing: 2 });
 
-        zeitgeist.GetItemsRemote(1244817199, 0, '', '', Lang.bind(this, this._recentChanged));
+        zeitgeist.GetItemsRemote(1244817199, 0, 5, false, true,
+            '', '', Lang.bind(this, this._recentChanged));
         //this._recentManager = Gtk.RecentManager.get_default();
         //this._recentManager.connect('changed', Lang.bind(this, this._recentChanged));
         //this._recentChanged();
