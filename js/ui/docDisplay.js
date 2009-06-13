@@ -264,14 +264,13 @@ ZeitgeistDocDisplayItem.prototype = {
     __proto__:  GenericDisplay.GenericDisplayItem.prototype,
 
     _init : function(item, availableWidth) {
-        GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth);     
-        this._item = item;
-        let name = item[2];
+        GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth);
         
-        // we can possibly display tags in the space for description
-        let description = item[6];
-
+        this._item = item;
         let icon = new Clutter.Texture();
+        let iconTheme = Gtk.IconTheme.get_default();
+        let pixbuf;
+        
         this._iconPixbuf = false; // Shell.get_thumbnail_for_recent_info(item);
         if (this._iconPixbuf) {
             // We calculate the width and height of the texture so as to preserve the aspect ratio of the thumbnail.
@@ -284,14 +283,18 @@ ZeitgeistDocDisplayItem.prototype = {
             icon.x = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
             icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;       
         } else {
-            log(item);
+            if (true) {
+                pixbuf = iconTheme.load_icon('gtk-file',
+                    GenericDisplay.ITEM_DISPLAY_ICON_SIZE, 0);
+                Shell.clutter_texture_set_from_pixbuf(icon, pixbuf);
+            }
             //icon.set_from_file(global.imagedir + "remove-workspace.svg");
             //Shell.clutter_texture_set_from_file(icon, item.get_icon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE));
             //icon.x = GenericDisplay.ITEM_DISPLAY_PADDING;
             //icon.y = GenericDisplay.ITEM_DISPLAY_PADDING;
         } 
 
-        this._setItemInfo(name, description, icon);
+        this._setItemInfo(item[2], "", icon); // name, description, icon
     },
 
     //// Public methods ////

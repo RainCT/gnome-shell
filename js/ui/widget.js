@@ -252,7 +252,7 @@ DocsWidget.prototype = {
         this.title = "Recent Docs";
         this.actor = new Big.Box({ spacing: 2 });
 
-        zeitgeist.GetItemsRemote(1244817199, 0, 5, false, true,
+        zeitgeist.GetItemsRemote(0, 0, 5, false, true,
             '', '', Lang.bind(this, this._recentChanged));
         //this._recentManager = Gtk.RecentManager.get_default();
         //this._recentManager.connect('changed', Lang.bind(this, this._recentChanged));
@@ -272,7 +272,6 @@ DocsWidget.prototype = {
             this.actor.remove_actor(children[c]);
        
         for (i = 0; i < Math.min(docs.length, 5); i++) {
-            log(i);
             let box = new Big.Box({ padding: 2,
                                     corner_radius: 2 });
             let docDisplayItem = new DocDisplay.ZeitgeistDocDisplayItem(
