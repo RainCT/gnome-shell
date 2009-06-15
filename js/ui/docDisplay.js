@@ -34,7 +34,7 @@ DocDisplayItem.prototype = {
         let description = ""; 
 
         let icon = new Clutter.Texture();
-        this._iconPixbuf = Shell.get_thumbnail_for_recent_info(docInfo);
+        this._iconPixbuf = Shell.get_thumbnail(docInfo.get_uri(), docInfo.get_mime_type());
         if (this._iconPixbuf) {
             // We calculate the width and height of the texture so as to preserve the aspect ratio of the thumbnail.
             // Because the images generated based on thumbnails don't have an internal padding like system icons do,
@@ -44,7 +44,7 @@ DocDisplayItem.prototype = {
             icon.set_height(Math.ceil(this._iconPixbuf.get_height() * scalingFactor));
             Shell.clutter_texture_set_from_pixbuf(icon, this._iconPixbuf);
             icon.x = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
-            icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;       
+            icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
         } else {
             Shell.clutter_texture_set_from_pixbuf(icon, docInfo.get_icon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE));
             icon.x = GenericDisplay.ITEM_DISPLAY_PADDING;
@@ -271,7 +271,7 @@ ZeitgeistDocDisplayItem.prototype = {
         let iconTheme = Gtk.IconTheme.get_default();
         let pixbuf;
         
-        this._iconPixbuf = false; // Shell.get_thumbnail_for_recent_info(item);
+        this._iconPixbuf = Shell.get_thumbnail(item[1], item[5]);
         if (this._iconPixbuf) {
             // We calculate the width and height of the texture so as to preserve the aspect ratio of the thumbnail.
             // Because the images generated based on thumbnails don't have an internal padding like system icons do,
@@ -281,7 +281,7 @@ ZeitgeistDocDisplayItem.prototype = {
             icon.set_height(Math.ceil(this._iconPixbuf.get_height() * scalingFactor));
             Shell.clutter_texture_set_from_pixbuf(icon, this._iconPixbuf);
             icon.x = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
-            icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;       
+            icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
         } else {
             if (true) {
                 pixbuf = iconTheme.load_icon('gtk-file',
