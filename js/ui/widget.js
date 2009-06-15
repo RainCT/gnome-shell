@@ -29,7 +29,7 @@ let bus = DBus.session;
 var zeitgeistIface = {
     name: 'org.gnome.Zeitgeist',
     methods: [{ name: 'GetItems',
-                inSignature: 'iiibbss',
+                inSignature: 'iiibba(ssssss)',
                 outSignature: 'a(isssssssbsss)' },
              ],
     signals: [{ name: 'SignalUpdated',
@@ -259,8 +259,8 @@ DocsWidget.prototype = {
     },
 
     _updateItems: function(emitter) {
-        zeitgeist.GetItemsRemote(0, 0, 5, false, true,
-            '', '', Lang.bind(this, this._recentChanged));
+        zeitgeist.GetItemsRemote(0, 0, 5, false, true, [],
+            Lang.bind(this, this._recentChanged));
     },
 
     _recentChanged: function(docs, excp) {
