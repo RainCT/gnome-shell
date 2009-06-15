@@ -341,22 +341,63 @@ shell_clutter_texture_set_from_pixbuf (ClutterTexture *texture,
 static GnomeThumbnailFactory *thumbnail_factory;
 
 /**
- * shell_get_thumbnail_for_recent_info:
+ * g_time_val_to_time_t:
  *
- * @recent_info: #GtkRecentInfo for which to return a thumbnail
+ * @timeval: #GTimeVal for conversion into the time_t type
+ * 
+ * Function taken from libeog/eog-image.c, whose authors wrote it
+ * based upon a similar function from libsoup/soup-date.c
+ *
+ * Return value: timestamp from timeval converted to time_t
+ */
+static time_t
+g_time_val_to_time_t (GTimeVal *timeval)
+{
+	GDate *date = g_date_new ();
+	GDate *epoch = g_date_new_dmy (1, 1, 1970);
+	g_date_set_time_val (date, timeval);
+	
+	if (date->year < 1970)
+		return 0;
+
+	if (sizeof (time_t) == 4 && date->year > 2038)
+		return (time_t)0x7fffffff;
+	
+	time_t tt = 24 * 3600 * g_date_days_between (epoch, date);
+	g_free (date);
+	g_free (epoch);
+	return tt;
+}
+
+/**
+ * shell_get_thumbnail:
+ *
+ * @uri: URI of the file to thumbnail
+ * 
+ * @mime_type: Mime-Type of the file to thumbnail
  *
  * Return value: #GdkPixbuf containing a thumbnail for the file described by #GtkRecentInfo 
  *               if the thumbnail exists or can be generated, %NULL otherwise
  */
 GdkPixbuf *
-shell_get_thumbnail_for_recent_info(GtkRecentInfo  *recent_info)
+shell_get_thumbnail(const gchar *uri, const gchar *mime_type)
 {
     char *existing_thumbnail;
     GdkPixbuf *pixbuf = NULL;
-    const gchar *uri = gtk_recent_info_get_uri (recent_info);
-    time_t mtime = gtk_recent_info_get_modified (recent_info);
-    const gchar *mime_type = gtk_recent_info_get_mime_type (recent_info);
     GError *error = NULL;
+    GFile *file = NULL;
+    GFileInfo *file_info = NULL;
+    GTimeVal mtime_g;
+    time_t mtime = 0;
+    
+    file = g_file_new_for_uri (uri);
+    file_info = g_file_query_info (file, G_FILE_ATTRIBUTE_TIME_MODIFIED, G_FILE_QUERY_INFO_NONE, NULL, NULL);
+    g_object_unref (file);
+    if (file_info) {
+        g_file_info_get_modification_time (file_info, &mtime_g);
+        g_object_unref (file_info);
+        mtime = g_time_val_to_time_t (&mtime_g);
+    }
     
     if (thumbnail_factory == NULL)
       thumbnail_factory = gnome_thumbnail_factory_new (GNOME_THUMBNAIL_SIZE_NORMAL);
