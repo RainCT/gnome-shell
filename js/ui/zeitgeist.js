@@ -27,4 +27,28 @@ Zeitgeist.prototype = {
 };
 
 DBus.proxifyPrototype(Zeitgeist.prototype, zeitgeistIface);
-let zeitgeist = new Zeitgeist();
+let iface = new Zeitgeist();
+
+function ZeitgeistItem(item) {
+    this._init(item);
+};
+
+ZeitgeistItem.prototype = {
+    _init: function(item) {
+        if (item.length == 13) {
+            this.timestamp = item[0];
+			this.uri = item[1];
+			this.name = item[2];
+			//this.source = item[3];
+			//this.content = item[4];
+			this.mime_type = item[5];
+			this.tags = item[6];
+			//this.comment = item[7];
+			this.bookmark = item[8];
+			//this.usage = item[9];
+			this.icon = item[10];
+			this.app = item[11];
+			//this.origin = item[12];
+		}
+	}
+};

@@ -11,7 +11,7 @@ const Signals = imports.signals;
 
 const AppDisplay = imports.ui.appDisplay;
 const DocDisplay = imports.ui.docDisplay;
-const zeitgeist = imports.ui.zeitgeist.zeitgeist;
+const Zeitgeist = imports.ui.zeitgeist;
 
 const COLLAPSED_WIDTH = 24;
 const EXPANDED_WIDTH = 200;
@@ -227,12 +227,12 @@ DocsWidget.prototype = {
         this.title = "Recent Docs";
         this.actor = new Big.Box({ spacing: 2 });
 
-        zeitgeist.connect('SignalUpdated', Lang.bind(this, this._updateItems));
+        Zeitgeist.iface.connect('SignalUpdated', Lang.bind(this, this._updateItems));
         this._updateItems('');
     },
 
     _updateItems: function(emitter) {
-        zeitgeist.GetItemsRemote(0, 0, 5, false, true, [],
+        Zeitgeist.iface.GetItemsRemote(0, 0, 5, false, true, [],
             Lang.bind(this, this._recentChanged));
     },
 
@@ -251,8 +251,9 @@ DocsWidget.prototype = {
         for (i = 0; i < Math.min(docs.length, 5); i++) {
             let box = new Big.Box({ padding: 2,
                                     corner_radius: 2 });
+            let item = new Zeitgeist.ZeitgeistItem(docs[i]);
             let docDisplayItem = new DocDisplay.ZeitgeistDocDisplayItem(
-               docs[i], EXPANDED_WIDTH);
+               item, EXPANDED_WIDTH);
             hackUpDisplayItemColors(docDisplayItem);
             box.append(docDisplayItem.actor, Big.BoxPackFlags.NONE);
             this.actor.append(box, Big.BoxPackFlags.NONE);

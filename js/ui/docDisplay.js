@@ -271,7 +271,7 @@ ZeitgeistDocDisplayItem.prototype = {
         let iconTheme = Gtk.IconTheme.get_default();
         let pixbuf;
         
-        this._iconPixbuf = Shell.get_thumbnail(item[1], item[5]);
+        this._iconPixbuf = Shell.get_thumbnail(item.uri, item.mime_type);
         if (this._iconPixbuf) {
             // We calculate the width and height of the texture so as to preserve the aspect ratio of the thumbnail.
             // Because the images generated based on thumbnails don't have an internal padding like system icons do,
@@ -283,16 +283,16 @@ ZeitgeistDocDisplayItem.prototype = {
             icon.x = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
             icon.y = GenericDisplay.ITEM_DISPLAY_PADDING + ITEM_DISPLAY_ICON_MARGIN;
         } else {
-            this._iconPixbuf = Shell.get_icon_for_mime_type(item[5],
+            this._iconPixbuf = Shell.get_icon_for_mime_type(item.mime_type,
                 GenericDisplay.ITEM_DISPLAY_ICON_SIZE);
             if (!this._iconPixbuf) {
                 this._iconPixbuf = iconTheme.load_icon('gtk-file',
                     GenericDisplay.ITEM_DISPLAY_ICON_SIZE, 0);
             }
             Shell.clutter_texture_set_from_pixbuf(icon, this._iconPixbuf);
-        } 
+        }
 
-        this._setItemInfo(item[2], "", icon); // name, description, icon
+        this._setItemInfo(item.name, "", icon); // name, description, icon
     },
 
     //// Public methods ////
@@ -309,15 +309,15 @@ ZeitgeistDocDisplayItem.prototype = {
         // While using Gio.app_info_launch_default_for_uri() would be shorter
         // in terms of lines of code, we are not doing so because that would 
         // duplicate the work of retrieving the mime type.       
-        let mimeType = this._item[5];
+        let mimeType = this._item.mime_type;
         let appInfo = Gio.app_info_get_default_for_type(mimeType, true);
 
         if (appInfo != null) {
-            appInfo.launch_uris([this._item[1]], Main.createAppLaunchContext());
+            appInfo.launch_uris([this._item.uri], Main.createAppLaunchContext());
         } else {
             log("Failed to get default application info for mime type " + mimeType + 
                 ". Will try to use the last application that registered the document."); 
-            let appName = this._item[10];
+            let appName = this._item.app;
             success = false; // let [success, appExec, count, time] = this._item.get_application_info(appName);
             if (success) {
                 log("Will open a document with the following command: " + appExec);
@@ -340,7 +340,7 @@ ZeitgeistDocDisplayItem.prototype = {
                 // the app launch context, no startup notification occurs.
                 appInfo.launch([], Main.createAppLaunchContext());
             } else {
-                log("Failed to get application info for " + this._item[1]);
+                log("Failed to get application info for " + this._item.uri);
             }
         }
     },
