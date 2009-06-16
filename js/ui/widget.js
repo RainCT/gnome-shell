@@ -30,7 +30,7 @@ var zeitgeistIface = {
     name: 'org.gnome.Zeitgeist',
     methods: [{ name: 'GetItems',
                 inSignature: 'iiibba(ssssss)',
-                outSignature: 'a(isssssssbsss)' },
+                outSignature: 'a(isssssssbssss)' },
              ],
     signals: [{ name: 'SignalUpdated',
                 inSignature: '' },
