@@ -4,7 +4,6 @@ const Big = imports.gi.Big;
 const Clutter = imports.gi.Clutter;
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
-const DBus = imports.dbus;
 const Mainloop = imports.mainloop;
 const Lang = imports.lang;
 const Shell = imports.gi.Shell;
@@ -12,6 +11,7 @@ const Signals = imports.signals;
 
 const AppDisplay = imports.ui.appDisplay;
 const DocDisplay = imports.ui.docDisplay;
+const zeitgeist = imports.ui.zeitgeist.zeitgeist;
 
 const COLLAPSED_WIDTH = 24;
 const EXPANDED_WIDTH = 200;
@@ -23,33 +23,6 @@ const STATE_EXPANDING   = 3;
 const STATE_POPPING_OUT = 4;
 const STATE_POPPED_OUT  = 5;
 const STATE_POPPING_IN  = 6;
-
-let bus = DBus.session;
-
-var zeitgeistIface = {
-    name: 'org.gnome.Zeitgeist',
-    methods: [{ name: 'GetItems',
-                inSignature: 'iiibba(ssssss)',
-                outSignature: 'a(isssssssbssss)' },
-             ],
-    signals: [{ name: 'SignalUpdated',
-                inSignature: '' },
-            ]
-};
-
-function Zeitgeist() {
-    this._init();
-};
-
-Zeitgeist.prototype = {
-     _init: function() {
-         DBus.session.proxifyObject(this, 'org.gnome.Zeitgeist',
-             '/org/gnome/Zeitgeist');
-     }
-};
-
-DBus.proxifyPrototype(Zeitgeist.prototype, zeitgeistIface);
-let zeitgeist = new Zeitgeist();
 
 function Widget() {
 }
