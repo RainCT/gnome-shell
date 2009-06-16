@@ -226,9 +226,15 @@ DocsWidget.prototype = {
     _init : function() {
         this.title = "Recent Docs";
         this.actor = new Big.Box({ spacing: 2 });
+        
+        // If retrieving items from Zeitgeist fails we fallback to
+        // GtkRecentlyUsed. In this case, we save the ID of the
+        // connection to its 'changed' signal in the variable below.
+        this.zeitgeist_error = null;
 
         Zeitgeist.iface.connect('SignalUpdated', Lang.bind(this, this._updateItems));
-        this._updateItems('');
+        Zeitgeist.iface.connect('SignalExit', Lang.bind(this, this._zeitgeistQuit));
+        this._updateItems();
     },
 
     _updateItems: function(emitter) {
@@ -236,12 +242,38 @@ DocsWidget.prototype = {
             Lang.bind(this, this._recentChanged));
     },
 
+    _zeitgeistQuit: function(emitter) {
+        log('Zeitgeist is leaving...');
+        this._recentChanged();
+    },
+
+    _recentChangedProxy: function(data) {
+        this._recentChanged();
+    },
+
     _recentChanged: function(docs, excp) {
         let i;
 
-        if (excp) {
-            log('Error fetching recently used items:\n' + excp)
-            return;
+        if (excp || (!docs && this.zeitgeist_error == null)) {
+            log('Could not fetch recently used items from Zeitgeist: ' + excp);
+            this._recentManager = Gtk.RecentManager.get_default();
+            this.zeitgeist_error = this._recentManager.connect('changed',
+                Lang.bind(this, this._recentChangedProxy));
+        }
+
+        if (this.zeitgeist_error != null && docs) {
+            log('Recovered connection to Zeitgeist.')
+            this._recentManager.disconnect(this.zeitgeist_error);
+            this.zeitgeist_error = null;
+        }
+
+        if (!docs) {
+            docs = this._recentManager.get_items();
+            for (i = 0; i < docs.length; i++) {
+                if (!docs[i].exists())
+                    delete docs[i];
+            }
+            docs.sort(function (a,b) { return b.get_modified() - a.get_modified() });
         }
 
         let children = this.actor.get_children();
