@@ -271,7 +271,7 @@ ZeitgeistDocDisplayItem.prototype = {
         let iconTheme = Gtk.IconTheme.get_default();
         let pixbuf;
         
-        this._iconPixbuf = false; // Shell.get_thumbnail_for_recent_info(item);
+        this._iconPixbuf = Shell.get_thumbnail(item[1], item[5]);
         if (this._iconPixbuf) {
             // We calculate the width and height of the texture so as to preserve the aspect ratio of the thumbnail.
             // Because the images generated based on thumbnails don't have an internal padding like system icons do,
