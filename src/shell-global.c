@@ -344,10 +344,9 @@ static GnomeThumbnailFactory *thumbnail_factory;
  * shell_get_thumbnail:
  *
  * @uri: URI of the file to thumbnail
- *
  * @mime_type: Mime-Type of the file to thumbnail
  *
- * Return value: #GdkPixbuf containing a thumbnail for file @uri
+ * Return value: #GdkPixbuf containing a thumbnail for file @uri 
  *               if the thumbnail exists or can be generated, %NULL otherwise
  */
 GdkPixbuf *
