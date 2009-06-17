@@ -13,7 +13,6 @@ const Signals = imports.signals;
 const AppInfo = imports.misc.appInfo;
 const DocDisplay = imports.ui.docDisplay;
 const Zeitgeist = imports.ui.zeitgeist;
-const DocInfo = imports.misc.docInfo;
 
 const COLLAPSED_WIDTH = 24;
 const EXPANDED_WIDTH = 200;
@@ -301,60 +300,15 @@ DocsWidget.prototype = {
     _init : function() {
         this.title = "Recent Docs";
         this.actor = new Big.Box({ spacing: 2 });
-        
-        // If retrieving items from Zeitgeist fails we fallback to
-        // GtkRecentlyUsed. In this case, we save the ID of the
-        // connection to its 'changed' signal in the variable below.
-        this.zeitgeist_error = null;
-
-        Zeitgeist.iface.connect('SignalUpdated', Lang.bind(this, this._updateItems));
-        Zeitgeist.iface.connect('SignalExit', Lang.bind(this, this._zeitgeistQuit));
-        this._updateItems();
+        this.numberOfItems = 5;
+        Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
+            this._recentChanged), this.numberOfItems);
     },
 
-    _updateItems: function(emitter) {
-        Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, true, [],
-            Lang.bind(this, this._recentChanged));
-    },
-
-    _zeitgeistQuit: function(emitter) {
-        log('Zeitgeist is leaving...');
-        this._recentChanged();
-    },
-
-    _recentChanged: function(docs, excp) {
-        let i;
-
-        if (excp || (!docs && this.zeitgeist_error == null)) {
-            log('Could not fetch recently used items from Zeitgeist: ' + excp);
-            this._recentManager = Gtk.RecentManager.get_default();
-            this.zeitgeist_error = this._recentManager.connect('changed',
-                Lang.bind(this, function() { this._recentChanged(); }));
-        }
-
-        if (this.zeitgeist_error != null && docs) {
-            log('Recovered connection to Zeitgeist.')
-            this._recentManager.disconnect(this.zeitgeist_error);
-            this.zeitgeist_error = null;
-        }
-
+    _recentChanged: function(items) {
         this.clear();
 
-        if (docs) {
-            for (i = 0; i < docs.length; i++)
-                this.addItem(new DocInfo.DocInfo (docs[i]));
-        } else {
-            let items = []
-            docs = this._recentManager.get_items();
-            for (i = 0; i < docs.length; i++) {
-                let docInfo = new DocInfo.DocInfo (docs[i]);
-
-                if (docInfo.exists())
-                    items.push(docInfo);
-            }
-            docs.sort(function (a,b) { return b.get_modified() - a.get_modified() });
-            for (i = 0; i < Math.min(items.length, 5); i++)
-                this.addItem(items[i]);
-        }
+        for (let i = 0; i < Math.min(items.length, this.numberOfItems); i++)
+            this.addItem(items[i]);
     }
 };
