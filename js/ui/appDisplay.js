@@ -374,7 +374,7 @@ AppDisplay.prototype = {
     _compareItems : function(itemIdA, itemIdB) {
         let appA = this._allItems[itemIdA];
         let appB = this._allItems[itemIdB];
-        return appA.get_name().localeCompare(appB.get_name());
+        return appA.name.localeCompare(appB.get_name());
     },
 
     // Checks if the item info can be a match for the search string by checking

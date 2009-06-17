@@ -70,6 +70,9 @@ DocInfo.prototype = {
                 iconPixbuf = this._recentInfo.get_icon(size);
             } else {
                 iconPixbuf = Shell.get_icon_for_mime_type(this.mimeType, size);
+                if (!iconPixbuf) {
+                    iconPixbuf = Gtk.IconTheme.get_default().load_icon('gtk-file', size, 0);
+                }
             }
             Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
             return icon;
