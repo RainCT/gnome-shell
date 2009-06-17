@@ -763,7 +763,6 @@ GenericDisplay.prototype = {
         if (!this._grid.visible)
             return;
         
-        this._refreshCache();
         if (!this._filterActive())
             this._setDefaultList();
         else

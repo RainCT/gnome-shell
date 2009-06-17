@@ -129,7 +129,7 @@ DocInfo.prototype = {
         if (this._recentInfo) {
             return this._recentInfo.exists();
         } else {
-            return true;
+            return true; // FIXME
         }
     },
 
@@ -139,6 +139,10 @@ DocInfo.prototype = {
         // correctly. See
         // http://bugzilla.gnome.org/show_bug.cgi?id=567094
 
-        return this._recentInfo.get_modified();
+        if (this._recentInfo) {
+            return this._recentInfo.get_modified();
+        } else {
+            return this.timestamp;
+        }
     }
 };
