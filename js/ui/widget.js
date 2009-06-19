@@ -12,7 +12,7 @@ const Signals = imports.signals;
 
 const AppInfo = imports.misc.appInfo;
 const DocDisplay = imports.ui.docDisplay;
-const Zeitgeist = imports.ui.zeitgeist;
+const Zeitgeist = imports.misc.zeitgeist;
 
 const COLLAPSED_WIDTH = 24;
 const EXPANDED_WIDTH = 200;

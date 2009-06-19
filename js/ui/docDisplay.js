@@ -9,7 +9,7 @@ const Signals = imports.signals;
 
 const DocInfo = imports.misc.docInfo;
 const GenericDisplay = imports.ui.genericDisplay;
-const Zeitgeist = imports.ui.zeitgeist;
+const Zeitgeist = imports.misc.zeitgeist;
 const Main = imports.ui.main;
 
 /* This class represents a single display item containing information about a document.
