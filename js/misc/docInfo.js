@@ -39,14 +39,15 @@ DocInfo.prototype = {
             this.mimeType = item.get_mime_type();
             this.app = item.last_application();
         }
-
-        this._iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
     },
 
     getIcon : function(size) {
         let icon = new Clutter.Texture();
 
-        if (this._iconPixbuf) {
+        if (this.uri.match("^file://"))
+            let iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
+
+        if (iconPixbuf) {
             // We calculate the width and height of the texture so as
             // to preserve the aspect ratio of the thumbnail. Because
             // the images generated based on thumbnails don't have an
@@ -71,7 +72,7 @@ DocInfo.prototype = {
             } else {
                 iconPixbuf = Shell.get_icon_for_mime_type(this.mimeType, size);
                 if (!iconPixbuf) {
-                    iconPixbuf = Gtk.IconTheme.get_default().load_icon('gtk-file', size, 0);
+                    iconPixbuf = Gtk.IconTheme.get_default().load_icon("gtk-file", size, 0);
                 }
             }
             Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
