@@ -59,7 +59,8 @@ RecentDocsWatcher.prototype = {
     _updateItems: function(emitter) {
         if (this._numberOfItems && !this._zeitgeistError) {
             iface.FindEventsRemote(0, 0, this._numberOfItems,
-                false, true, [], Lang.bind(this, this._recentChanged));
+                false, true, [new Array('', 'file://%', '', '', '', '')],
+                Lang.bind(this, this._recentChanged));
         }
     },
 
