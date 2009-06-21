@@ -43,9 +43,10 @@ DocInfo.prototype = {
 
     getIcon : function(size) {
         let icon = new Clutter.Texture();
+        let iconPixbuf;
 
         if (this.uri.match("^file://"))
-            let iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
+            iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
 
         if (iconPixbuf) {
             // We calculate the width and height of the texture so as
@@ -66,7 +67,6 @@ DocInfo.prototype = {
             icon.set_position(THUMBNAIL_ICON_MARGIN, THUMBNAIL_ICON_MARGIN);
             return group;
         } else {
-            let iconPixbuf;
             if (this._recentInfo) {
                 iconPixbuf = this._recentInfo.get_icon(size);
             } else {
