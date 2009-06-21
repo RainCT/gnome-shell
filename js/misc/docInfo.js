@@ -19,14 +19,16 @@ DocInfo.prototype = {
         this.name = recentInfo.get_display_name();
         this.uri = recentInfo.get_uri();
         this.mimeType = recentInfo.get_mime_type();
-
-        this._iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
     },
 
     getIcon : function(size) {
         let icon = new Clutter.Texture();
+        let iconPixbuf;
 
-        if (this._iconPixbuf) {
+        if (this.uri.match("^file://"))
+            iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
+
+        if (iconPixbuf) {
             // We calculate the width and height of the texture so as
             // to preserve the aspect ratio of the thumbnail. Because
             // the images generated based on thumbnails don't have an
