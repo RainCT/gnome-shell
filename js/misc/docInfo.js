@@ -9,24 +9,46 @@ const Main = imports.ui.main;
 
 const THUMBNAIL_ICON_MARGIN = 2;
 
-function DocInfo(recentInfo) {
-    this._init(recentInfo);
+function DocInfo(item) {
+    this._init(item);
 }
 
 DocInfo.prototype = {
-    _init : function(recentInfo) {
-        this._recentInfo = recentInfo;
-        this.name = recentInfo.get_display_name();
-        this.uri = recentInfo.get_uri();
-        this.mimeType = recentInfo.get_mime_type();
-
-        this._iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
+    _init : function(item) {
+        if (item.length == 13) {
+            // Item from Zeitgeist
+            this._recentlyUsed = null;
+            this.timestamp = item[0];
+            this.uri = item[1];
+            this.name = item[2];
+            //this.source = item[3];
+            //this.content = item[4];
+            this.mimeType = item[5];
+            this.tags = item[6];
+            //this.comment = item[7];
+            this.bookmark = item[8];
+            //this.usage = item[9];
+            this.icon = item[10];
+            this.app = item[11];
+            //this.origin = item[12];
+        } else {
+            // Item from GtkRecentlyUsed
+            this._recentInfo = item;
+            this.name = item.get_display_name();
+            this.uri = item.get_uri();
+            this.mimeType = item.get_mime_type();
+            this.app = item.last_application();
+        }
     },
 
     getIcon : function(size) {
         let icon = new Clutter.Texture();
+        let iconPixbuf;
 
-        if (this._iconPixbuf) {
+        if (this.uri.match("^file://"))
+            iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
+
+        if (iconPixbuf) {
             // We calculate the width and height of the texture so as
             // to preserve the aspect ratio of the thumbnail. Because
             // the images generated based on thumbnails don't have an
@@ -34,10 +56,10 @@ DocInfo.prototype = {
             // slightly smaller texture and then create a group around
             // it for padding purposes
 
-            let scalingFactor = (size - THUMBNAIL_ICON_MARGIN * 2) / Math.max(this._iconPixbuf.get_width(), this._iconPixbuf.get_height());
-            icon.set_width(Math.ceil(this._iconPixbuf.get_width() * scalingFactor));
-            icon.set_height(Math.ceil(this._iconPixbuf.get_height() * scalingFactor));
-            Shell.clutter_texture_set_from_pixbuf(icon, this._iconPixbuf);
+            let scalingFactor = (size - THUMBNAIL_ICON_MARGIN * 2) / Math.max(iconPixbuf.get_width(), iconPixbuf.get_height());
+            icon.set_width(Math.ceil(iconPixbuf.get_width() * scalingFactor));
+            icon.set_height(Math.ceil(iconPixbuf.get_height() * scalingFactor));
+            Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
 
             let group = new Clutter.Group({ width: size,
                                             height: size });
@@ -45,7 +67,15 @@ DocInfo.prototype = {
             icon.set_position(THUMBNAIL_ICON_MARGIN, THUMBNAIL_ICON_MARGIN);
             return group;
         } else {
-            Shell.clutter_texture_set_from_pixbuf(icon, this._recentInfo.get_icon(size));
+            if (this._recentInfo) {
+                iconPixbuf = this._recentInfo.get_icon(size);
+            } else {
+                iconPixbuf = Shell.get_icon_for_mime_type(this.mimeType, size);
+                if (!iconPixbuf) {
+                    iconPixbuf = Gtk.IconTheme.get_default().load_icon("gtk-file", size, 0);
+                }
+            }
+            Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
             return icon;
         }
     },
@@ -63,8 +93,7 @@ DocInfo.prototype = {
         } else {
             log("Failed to get default application info for mime type " + mimeType +
                 ". Will try to use the last application that registered the document.");
-            let appName = this._recentInfo.last_application();
-            let [success, appExec, count, time] = this._recentInfo.get_application_info(appName);
+            let [success, appExec, count, time] = this._recentInfo.get_application_info(this.app);
             if (success) {
                 log("Will open a document with the following command: " + appExec);
                 // TODO: Change this once better support for creating
@@ -98,7 +127,11 @@ DocInfo.prototype = {
     },
 
     exists : function() {
-        return this._recentInfo.exists();
+        if (this._recentInfo) {
+            return this._recentInfo.exists();
+        } else {
+            return true; // FIXME
+        }
     },
 
     lastVisited : function() {
@@ -107,6 +140,10 @@ DocInfo.prototype = {
         // correctly. See
         // http://bugzilla.gnome.org/show_bug.cgi?id=567094
 
-        return this._recentInfo.get_modified();
+        if (this._recentInfo) {
+            return this._recentInfo.get_modified();
+        } else {
+            return this.timestamp;
+        }
     }
 };

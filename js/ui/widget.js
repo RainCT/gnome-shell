@@ -12,7 +12,7 @@ const Signals = imports.signals;
 
 const AppInfo = imports.misc.appInfo;
 const DocDisplay = imports.ui.docDisplay;
-const DocInfo = imports.misc.docInfo;
+const Zeitgeist = imports.misc.zeitgeist;
 
 const COLLAPSED_WIDTH = 24;
 const EXPANDED_WIDTH = 200;
@@ -300,28 +300,15 @@ DocsWidget.prototype = {
     _init : function() {
         this.title = "Recent Docs";
         this.actor = new Big.Box({ spacing: 2 });
-
-        this._recentManager = Gtk.RecentManager.get_default();
-        this._recentManager.connect('changed', Lang.bind(this, this._recentChanged));
-        this._recentChanged();
+        this.numberOfItems = 5;
+        Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
+            this._recentChanged), this.numberOfItems);
     },
 
-    _recentChanged: function() {
-        let i;
-
+    _recentChanged: function(items) {
         this.clear();
 
-        let items = [];
-        let docs = this._recentManager.get_items();
-        for (i = 0; i < docs.length; i++) {
-            let docInfo = new DocInfo.DocInfo (docs[i]);
-
-            if (docInfo.exists())
-                items.push(docInfo);
-        }
-
-        items.sort(function (a,b) { return b.lastVisited() - a.lastVisited(); });
-        for (i = 0; i < Math.min(items.length, 5); i++)
+        for (let i = 0; i < Math.min(items.length, this.numberOfItems); i++)
             this.addItem(items[i]);
     }
 };

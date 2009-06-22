@@ -9,6 +9,7 @@ const Signals = imports.signals;
 
 const DocInfo = imports.misc.docInfo;
 const GenericDisplay = imports.ui.genericDisplay;
+const Zeitgeist = imports.misc.zeitgeist;
 const Main = imports.ui.main;
 
 /* This class represents a single display item containing information about a document.
@@ -72,37 +73,20 @@ DocDisplay.prototype = {
     __proto__:  GenericDisplay.GenericDisplay.prototype,
 
     _init : function(width, height, numberOfColumns, columnGap) {
-        GenericDisplay.GenericDisplay.prototype._init.call(this, width, height, numberOfColumns, columnGap);  
-        let me = this;
-        this._recentManager = Gtk.RecentManager.get_default();
-        this._docsStale = true;
-        this._recentManager.connect('changed', function(recentManager, userData) {
-            me._docsStale = true;
-            // Changes in local recent files should not happen when we are in the overlay mode,
-            // but redisplaying right away is cool when we use Zephyr.
-            // Also, we might be displaying remote documents, like Google Docs, in the future
-            // which might be edited by someone else.
-            me._redisplay(false); 
-        });
+        GenericDisplay.GenericDisplay.prototype._init.call(this, width, height, numberOfColumns, columnGap);
+        Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
+            this._refreshCache), 500); // FIXME: Do not hardcode 500. Use iterators or sth else.
     },
 
     //// Protected method overrides ////
 
     // Gets the list of recent items from the recent items manager.
-    _refreshCache : function() {
-        let me = this;
-        if (!this._docsStale)
-            return;
+    _refreshCache : function(items) {
         this._allItems = {};
-        let docs = this._recentManager.get_items();
-        for (let i = 0; i < docs.length; i++) {
-            let recentInfo = docs[i];
-            let docInfo = new DocInfo.DocInfo(recentInfo);
-
-            // we use GtkRecentInfo URI as an item Id
+        for (let i = 0; i < items.length; i++) {
+            let docInfo = items[i];
             this._allItems[docInfo.uri] = docInfo;
         }
-        this._docsStale = false;
     },
 
     // Sets the list of the displayed items based on how recently they were last visited.
@@ -138,16 +122,6 @@ DocDisplay.prototype = {
         this._matchedItems.sort(Lang.bind(this, function (a,b) { return this._compareItems(a,b); }));
     },
 
-    // Compares items associated with the item ids based on how recently the items
-    // were last visited.
-    // Returns an integer value indicating the result of the comparison.
-   _compareItems : function(itemIdA, itemIdB) {
-        let docA = this._allItems[itemIdA];
-        let docB = this._allItems[itemIdB];
-
-        return docB.lastVisited() - docA.lastVisited();
-    },
-
     // Checks if the item info can be a match for the search string by checking
     // the name of the document. Item info is expected to be GtkRecentInfo.
     // Returns a boolean flag indicating if itemInfo is a match.
@@ -166,10 +140,20 @@ DocDisplay.prototype = {
         return false;
     },
 
+    // Compares items associated with the item ids based on how recently the items
+    // were last visited.
+    // Returns an integer value indicating the result of the comparison.
+   _compareItems : function(itemIdA, itemIdB) {
+        let docA = this._allItems[itemIdA];
+        let docB = this._allItems[itemIdB];
+
+        return docB.lastVisited() - docA.lastVisited();
+    },
+
     // Creates a DocDisplayItem based on itemInfo, which is expected to be a DocInfo object.
     _createDisplayItem: function(itemInfo) {
         return new DocDisplayItem(itemInfo, this._columnWidth);
-    } 
+    }
 };
 
 Signals.addSignalMethods(DocDisplay.prototype);
