@@ -56,10 +56,10 @@ DocInfo.prototype = {
             // slightly smaller texture and then create a group around
             // it for padding purposes
 
-            let scalingFactor = (size - THUMBNAIL_ICON_MARGIN * 2) / Math.max(this._iconPixbuf.get_width(), this._iconPixbuf.get_height());
-            icon.set_width(Math.ceil(this._iconPixbuf.get_width() * scalingFactor));
-            icon.set_height(Math.ceil(this._iconPixbuf.get_height() * scalingFactor));
-            Shell.clutter_texture_set_from_pixbuf(icon, this._iconPixbuf);
+            let scalingFactor = (size - THUMBNAIL_ICON_MARGIN * 2) / Math.max(iconPixbuf.get_width(), iconPixbuf.get_height());
+            icon.set_width(Math.ceil(iconPixbuf.get_width() * scalingFactor));
+            icon.set_height(Math.ceil(iconPixbuf.get_height() * scalingFactor));
+            Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
 
             let group = new Clutter.Group({ width: size,
                                             height: size });
