@@ -11,7 +11,7 @@ let bus = DBus.session;
 var zeitgeistIface = {
     name: 'org.gnome.zeitgeist',
     methods: [{ name: 'FindEvents',
-                inSignature: 'iiibba(ssssss)',
+                inSignature: 'iiibba(ssasasss)',
                 outSignature: 'a(isssssssbssss)' },
              ],
     signals: [{ name: 'SignalUpdated',
