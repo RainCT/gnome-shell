@@ -11,16 +11,17 @@ let bus = DBus.session;
 var zeitgeistIface = {
     name: 'org.gnome.zeitgeist',
     methods: [{ name: 'FindEvents',
-                inSignature: 'iiibba(ssasasss)',
+                inSignature: 'iiibbaa{sv}',
                 outSignature: 'a(isssssssbssss)' },
              ],
-    signals: [{ name: 'SignalUpdated',
+    signals: [{ name: 'EventsChanged',
                 inSignature: '' },
-              { name: 'SignalExit',
+              { name: 'EngineStart',
+                inSignature: '' },
+              { name: 'EngineExit',
                 inSignature: '' },
             ]
 };
-
 
 function Zeitgeist() {
     this._init();
@@ -37,7 +38,6 @@ DBus.proxifyPrototype(Zeitgeist.prototype, zeitgeistIface);
 let iface = new Zeitgeist();
 
 
-
 function RecentDocsWatcher() {
     this._init();
 }
@@ -52,14 +52,15 @@ RecentDocsWatcher.prototype = {
         // connection to its 'changed' signal in the variable below.
         this._zeitgeistError = null;
 
-        iface.connect('SignalUpdated', Lang.bind(this, this._updateItems));
-        iface.connect('SignalExit', Lang.bind(this, this._zeitgeistQuit));
+        iface.connect('EventsChanged', Lang.bind(this, this._updateItems));
+        iface.connect('EngineStart', Lang.bind(this, this._updateItems));
+        iface.connect('EngineExit', Lang.bind(this, this._zeitgeistQuit));
     },
 
     _updateItems: function(emitter) {
         if (this._numberOfItems && !this._zeitgeistError) {
             iface.FindEventsRemote(0, 0, this._numberOfItems,
-                false, true, [new Array('', 'file://%', '', '', '', '')],
+                false, true, [{ text_uri: 'file://%' }],
                 Lang.bind(this, this._recentChanged));
         }
     },
