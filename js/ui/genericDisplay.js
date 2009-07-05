@@ -12,6 +12,7 @@ const Signals = imports.signals;
 const Shell = imports.gi.Shell;
 const Tidy = imports.gi.Tidy;
 
+const Button = imports.ui.button;
 const DND = imports.ui.dnd;
 const Link = imports.ui.link;
 
@@ -22,15 +23,18 @@ ITEM_DISPLAY_DESCRIPTION_COLOR.from_pixel(0xffffffbb);
 const ITEM_DISPLAY_BACKGROUND_COLOR = new Clutter.Color();
 ITEM_DISPLAY_BACKGROUND_COLOR.from_pixel(0x00000000);
 const ITEM_DISPLAY_SELECTED_BACKGROUND_COLOR = new Clutter.Color();
-ITEM_DISPLAY_SELECTED_BACKGROUND_COLOR.from_pixel(0x00ff0055);
+ITEM_DISPLAY_SELECTED_BACKGROUND_COLOR.from_pixel(0x4f6fadaa);
 const DISPLAY_CONTROL_SELECTED_COLOR = new Clutter.Color();
 DISPLAY_CONTROL_SELECTED_COLOR.from_pixel(0x112288ff);
 const PREVIEW_BOX_BACKGROUND_COLOR = new Clutter.Color();
 PREVIEW_BOX_BACKGROUND_COLOR.from_pixel(0xADADADf0);
+const HOT_PINK_DEBUG = new Clutter.Color();
+HOT_PINK_DEBUG.from_pixel(0xFF8888FF);
 
 const ITEM_DISPLAY_HEIGHT = 50;
 const ITEM_DISPLAY_ICON_SIZE = 48;
-const ITEM_DISPLAY_PADDING = 1;
+const ITEM_DISPLAY_PADDING_TOP = 1;
+const ITEM_DISPLAY_PADDING_RIGHT = 2;
 const DEFAULT_COLUMN_GAP = 6;
 const LABEL_HEIGHT = 16;
 
@@ -41,6 +45,8 @@ const PREVIEW_BOX_CORNER_RADIUS = 10;
 // how far relative to the full item width the preview box should be placed
 const PREVIEW_PLACING = 3/4;
 const PREVIEW_DETAILS_MIN_WIDTH = PREVIEW_ICON_SIZE * 2;
+
+const INFORMATION_BUTTON_SIZE = 16;
 
 /* This is a virtual class that represents a single display item containing
  * a name, a description, and an icon. It allows selecting an item and represents 
@@ -55,22 +61,17 @@ function GenericDisplayItem(availableWidth) {
 GenericDisplayItem.prototype = {
     _init: function(availableWidth) {
         this._availableWidth = availableWidth;
-        this._showPreview = false;
-        this._havePointer = false; 
-        this._previewEventSourceId = null;
 
         this.actor = new Clutter.Group({ reactive: true,
                                          width: availableWidth,
                                          height: ITEM_DISPLAY_HEIGHT });
         this.actor._delegate = this;
-        this.actor.connect('button-press-event',
-                           Lang.bind(this,
-                                     function(actor, e) {
-                                         let clickCount = Shell.get_button_event_click_count(e);
-                                         if (clickCount == 1)
-                                             this.select();
-                                         else if (clickCount == 2)
-                                             this.activate();
+        this.actor.connect('button-release-event', 
+                           Lang.bind(this, 
+                                     function() {
+                                         // Activates the item by launching it
+                                         this.emit('activate');
+                                         return true;  
                                      }));
 
         let draggable = DND.makeDraggable(this.actor);
@@ -81,17 +82,40 @@ GenericDisplayItem.prototype = {
                                  x: 0, y: 0,
                                  width: availableWidth, height: ITEM_DISPLAY_HEIGHT });
         this.actor.add_actor(this._bg);
-        
+
+        let global = Shell.Global.get();
+        let infoIconUri = "file://" + global.imagedir + "info.svg";
+        let infoIcon = Shell.TextureCache.get_default().load_uri_sync(infoIconUri,
+                                                                      INFORMATION_BUTTON_SIZE,
+                                                                      INFORMATION_BUTTON_SIZE);
+        this._informationButton = new Button.iconButton(this.actor, INFORMATION_BUTTON_SIZE, infoIcon);
+        this._informationButton.actor.x = availableWidth - ITEM_DISPLAY_PADDING_RIGHT - INFORMATION_BUTTON_SIZE;
+        this._informationButton.actor.y = ITEM_DISPLAY_HEIGHT / 2 - INFORMATION_BUTTON_SIZE / 2;
+
+        // Connecting to the button-press-event for the information button ensures that the actor, 
+        // which is a draggable actor, does not get the button-press-event and doesn't initiate
+        // the dragging, which then prevents us from getting the button-release-event for the button.
+        this._informationButton.actor.connect('button-press-event',
+                                              Lang.bind(this,
+                                                        function() {
+                                                            return true;
+                                                        }));
+        this._informationButton.actor.connect('button-release-event',
+                                              Lang.bind(this,
+                                                        function() {
+                                                            // Selects the item by highlighting it and displaying its details
+                                                            this.emit('select');
+                                                            return true;
+                                                        }));
+        this.actor.add_actor(this._informationButton.actor);
+        this._informationButton.actor.lower_bottom();
+
         this._name = null;
         this._description = null;
         this._icon = null;
-        this._preview = null;
         this._previewIcon = null; 
 
         this.dragActor = null;
-
-        this.actor.connect('enter-event', Lang.bind(this, this._onEnter));
-        this.actor.connect('leave-event', Lang.bind(this, this._onLeave));
     },
 
     //// Draggable object interface ////
@@ -99,8 +123,7 @@ GenericDisplayItem.prototype = {
     // Returns a cloned texture of the item's icon to represent the item as it 
     // is being dragged. 
     getDragActor: function(stageX, stageY) {
-        this.dragActor = new Clutter.Clone({ source: this._icon });
-        [this.dragActor.width, this.dragActor.height] = this._icon.get_transformed_size();
+        this.dragActor = this._createIcon();
 
         // If the user dragged from the icon itself, then position
         // the dragActor over the original icon. Otherwise center it
@@ -115,80 +138,34 @@ GenericDisplayItem.prototype = {
         return this.dragActor;
     },
     
-    // Returns the original icon that is being used as a source for the cloned texture
-    // that represents the item as it is being dragged.
+    // Returns the item icon, a separate copy of which is used to
+    // represent the item as it is being dragged. This is used to
+    // determine a snap-back location for the drag icon if it does
+    // not get accepted by any drop target.
     getDragActorSource: function() {
         return this._icon;
     },
 
     //// Public methods ////
 
-    // Sets a boolean value that indicates whether the item should display a pop-up preview on mouse over.
-    setShowPreview: function(showPreview) {
-        this._showPreview = showPreview;
-    },
-
-    // Returns a boolean value that indicates whether the item displays a pop-up preview on mouse over.
-    getShowPreview: function() {
-        return this._showPreview;
-    },
-
-    // Displays the preview for the item.
-    showPreview: function() {
-        if(!this._showPreview)
-            return;
-
-        this._ensurePreviewCreated();
-
-        let [x, y] = this.actor.get_transformed_position();
-        let global = Shell.Global.get();
-        let previewX = Math.min(x + this._availableWidth * PREVIEW_PLACING, global.screen_width - this._preview.width);
-        let previewY = Math.min(y, global.screen_height - this._preview.height);
-        this._preview.set_position(previewX, previewY);
-
-        this._preview.show();
-    },
-
-    // Hides the preview for the item and removes the preview event source so that 
-    // there is no preview scheduled to show up.
-    hidePreview: function() {
-        if (this._previewEventSourceId) {
-            Mainloop.source_remove(this._previewEventSourceId);
-            this._previewEventSourceId = null;
-        }
-
-        if (this._preview)
-            this._preview.hide();
-    },
-
-    // Shows a preview when the item was drawn under the mouse pointer.
+    // Shows the information button when the item was drawn under the mouse pointer.
     onDrawnUnderPointer: function() {
-        this._havePointer = true;
-        // This code is usually triggered when we just had a different preview showing on the same spot
-        // and having a delay before showing a new preview looks bad. So we just show it right away.
-        this.showPreview();  
+        this._informationButton.show();
     },
 
     // Highlights the item by setting a different background color than the default 
     // if isSelected is true, removes the highlighting otherwise.
     markSelected: function(isSelected) {
        let color;
-       if (isSelected)
+       if (isSelected) {
            color = ITEM_DISPLAY_SELECTED_BACKGROUND_COLOR;
-       else
+           this._informationButton.forceShow(true);
+       }
+       else {
            color = ITEM_DISPLAY_BACKGROUND_COLOR;
+           this._informationButton.forceShow(false);
+       }
        this._bg.background_color = color;
-    },
-
-    // Activates the item, as though it was launched
-    activate: function() {
-        this.hidePreview();
-        this.emit('activate');
-    },
-
-    // Selects the item, as though it was clicked
-    select: function() {
-        this.emit('select');
     },
 
     /*
@@ -199,7 +176,7 @@ GenericDisplayItem.prototype = {
      * availableHeight - height available for displaying details
      */ 
     createDetailsActor: function(availableWidth, availableHeight) {
-
+ 
         let details = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
                                     spacing: PREVIEW_BOX_SPACING,
                                     width: availableWidth });
@@ -241,28 +218,12 @@ GenericDisplayItem.prototype = {
             details.append(largePreview, Big.BoxPackFlags.NONE);
         }
    
-        // We hide the preview pop-up if the details are shown elsewhere. 
-        details.connect("show", 
-                        Lang.bind(this, 
-                                  function() {
-                                          // Right now "show" signal is emitted when an actor is added to a parent that
-                                          // has not been added to anything and "visible" property is also set to true 
-                                          // at this point, so checking if the parent that the actor has been added to  
-                                          // has a parent of its own is a temporary workaround. That other actor is 
-                                          // presumed to be displayed, which is a limitation of this workaround, but is
-                                          // the case with our usage of the details actor now.         
-                                          // http://bugzilla.openedhand.com/show_bug.cgi?id=1138
-                                          if (details.get_parent() != null && details.get_parent().get_parent() != null)
-                                              this.hidePreview();
-                                  }));
         return details;
     },
 
-    // Destoys the item, as well as a preview for the item if it exists.
+    // Destoys the item.
     destroy: function() {
       this.actor.destroy();
-      if (this._preview != null)
-          this._preview.destroy();
     },
     
     //// Pure virtual public methods ////
@@ -279,9 +240,8 @@ GenericDisplayItem.prototype = {
      *
      * nameText - name of the item
      * descriptionText - short description of the item
-     * iconActor - ClutterTexture containing the icon image which should be ITEM_DISPLAY_ICON_SIZE size
      */
-    _setItemInfo: function(nameText, descriptionText, iconActor) {
+    _setItemInfo: function(nameText, descriptionText) {
         if (this._name != null) {
             // this also removes this._name from the parent container,
             // so we don't need to call this.actor.remove_actor(this._name) directly
@@ -298,27 +258,23 @@ GenericDisplayItem.prototype = {
             this._icon.destroy();
             this._icon = null;
         } 
-        // This ensures we'll create a new preview and previewIcon next time we need a preview
-        if (this._preview != null) {
-            this._preview.destroy();
-            this._preview = null;
-        }
+        // This ensures we'll create a new previewIcon next time we need it
         if (this._previewIcon != null) {
             this._previewIcon.destroy();
             this._previewIcon = null;
         }
 
-        this._icon = iconActor;
+        this._icon = this._createIcon();
         this.actor.add_actor(this._icon);
 
-        let textWidth = this._availableWidth - (ITEM_DISPLAY_ICON_SIZE + 4);
+        let textWidth = this._availableWidth - (ITEM_DISPLAY_ICON_SIZE + 4) - INFORMATION_BUTTON_SIZE - ITEM_DISPLAY_PADDING_RIGHT;
         this._name = new Clutter.Text({ color: ITEM_DISPLAY_NAME_COLOR,
                                         font_name: "Sans 14px",
                                         width: textWidth,
                                         ellipsize: Pango.EllipsizeMode.END,
                                         text: nameText,
                                         x: ITEM_DISPLAY_ICON_SIZE + 4,
-                                        y: ITEM_DISPLAY_PADDING });
+                                        y: ITEM_DISPLAY_PADDING_TOP });
         this.actor.add_actor(this._name);
         this._description = new Clutter.Text({ color: ITEM_DISPLAY_DESCRIPTION_COLOR,
                                                font_name: "Sans 12px",
@@ -339,6 +295,11 @@ GenericDisplayItem.prototype = {
 
     //// Pure virtual protected methods ////
 
+    // Returns an icon for the item.
+    _createIcon: function() {
+        throw new Error("Not implemented");
+    },
+
     // Ensures the preview icon is created.
     _ensurePreviewIconCreated: function() {
         throw new Error("Not implemented");
@@ -346,79 +307,11 @@ GenericDisplayItem.prototype = {
 
     //// Private methods ////
 
-    // Ensures the preview actor is created.
-    _ensurePreviewCreated: function() {
-        if (!this._showPreview || this._preview)
-            return;
-
-        this._preview = new Big.Box({ background_color: PREVIEW_BOX_BACKGROUND_COLOR,
-                                      orientation: Big.BoxOrientation.HORIZONTAL,
-                                      corner_radius: PREVIEW_BOX_CORNER_RADIUS,
-                                      padding: PREVIEW_BOX_PADDING,
-                                      spacing: PREVIEW_BOX_SPACING });
-
-        let textDetailsWidth = this._availableWidth - PREVIEW_BOX_PADDING * 2;
-
-        this._ensurePreviewIconCreated();
-
-        if (this._previewIcon != null) {
-            this._preview.append(this._previewIcon, Big.BoxPackFlags.EXPAND);
-            textDetailsWidth = this._availableWidth - this._previewIcon.width - PREVIEW_BOX_PADDING * 2 - PREVIEW_BOX_SPACING;
-        }
-
-	// Inner box with name and description
-        let textDetails = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
-                                        spacing: PREVIEW_BOX_SPACING });
-        let detailsName = new Clutter.Text({ color: ITEM_DISPLAY_NAME_COLOR,
-                                             font_name: "Sans bold 14px",
-                                             text: this._name.text});
-
-        textDetails.width = Math.max(PREVIEW_DETAILS_MIN_WIDTH, textDetailsWidth, detailsName.width);
-
-        textDetails.append(detailsName, Big.BoxPackFlags.NONE);
-
-        let detailsDescription = new Clutter.Text({ color: ITEM_DISPLAY_NAME_COLOR,
-                                                    font_name: "Sans 14px",
-                                                    line_wrap: true,
-                                                    text: this._description.text });
-        textDetails.append(detailsDescription, Big.BoxPackFlags.NONE);
-
-        this._preview.append(textDetails, Big.BoxPackFlags.EXPAND);
-
-        // Add the preview to global stage to allow for top-level layering
-        let global = Shell.Global.get();
-        global.stage.add_actor(this._preview);
-        this._preview.hide();
-    },
-
-    // Performs actions on mouse enter event for the item. Currently, shows the preview for the item.
-    _onEnter: function(actor, event) {
-        this._havePointer = true;
-        let tooltipTimeout = Gtk.Settings.get_default().gtk_tooltip_timeout;
-        this._previewEventSourceId = Mainloop.timeout_add(tooltipTimeout, 
-                                                          Lang.bind(this,
-                                                                    function() {
-                                                                        if (this._havePointer) {
-                                                                            this.showPreview();
-                                                                        }
-                                                                        this._previewEventSourceId = null;
-                                                                        return false;
-                                                                    }));
-    },
-
-    // Performs actions on mouse leave event for the item. Currently, hides the preview for the item.
-    _onLeave: function(actor, event) {
-        this._havePointer = false;
-        this.hidePreview();
-    },
-
-    // Hides the preview once the item starts being dragged.
+    // Hides the information button once the item starts being dragged.
     _onDragBegin : function (draggable, time) {
         // For some reason, we are not getting leave-event signal when we are dragging an item,
-        // so the preview box stays behind if we didn't have the call here. It makes sense to hide  
-        // the preview as soon as the item starts being dragged anyway.
-        this._havePointer = false;  
-        this.hidePreview();
+        // so we should remove the link manually.
+        this._informationButton.actor.hide();
     } 
 };
 
@@ -428,55 +321,48 @@ Signals.addSignalMethods(GenericDisplayItem.prototype);
  * that can be filtered with a search string.
  *
  * width - width available for the display
- * height - height available for the display
  */
-function GenericDisplay(width, height, numberOfColumns, columnGap) {
-    this._init(width, height, numberOfColumns, columnGap);
+function GenericDisplay(width) {
+    this._init(width);
 }
 
 GenericDisplay.prototype = {
-    _init : function(width, height, numberOfColumns, columnGap) {
+    _init : function(width) {
         this._search = '';
         this._expanded = false;
-        this._width = null;
-        this._height = null;
-        this._columnWidth = null;
-
-        this._numberOfColumns = numberOfColumns;
-        this._columnGap = columnGap;
-        if (this._columnGap == null)
-            this._columnGap = DEFAULT_COLUMN_GAP;
+        this._width = width;
 
         this._maxItemsPerPage = null;
-        this._grid = new Tidy.Grid({width: this._width, height: this._height});
+        this._list = new Shell.OverflowList({ width: this._width,
+                                              spacing: 6.0,
+                                              item_height: ITEM_DISPLAY_HEIGHT });
 
-        this._setDimensionsAndMaxItems(width, 0, height);
+        this._list.connect('notify::n-pages', Lang.bind(this, function (grid, alloc) {
+            this._updateDisplayControl(true);
+        }));
+        this._list.connect('notify::page', Lang.bind(this, function (grid, alloc) {
+            this._updateDisplayControl(false);
+        }));
 
-        this._grid.column_major = true;
-        this._grid.column_gap = this._columnGap;
         // map<itemId, Object> where Object represents the item info
-        this._allItems = {}; 
-        // an array of itemIds of items that match the current request 
+        this._allItems = {};
+        // an array of itemIds of items that match the current request
         // in the order in which the items should be displayed
         this._matchedItems = [];
         // map<itemId, GenericDisplayItem>
-        this._displayedItems = {};  
+        this._displayedItems = {};
         this._displayedItemsCount = 0;
-        this._pageDisplayed = 0;
         this._selectedIndex = -1;
         // These two are public - .actor is the normal "actor subclass" property,
         // but we also expose a .displayControl actor which is separate.
         // See also getSideArea.
-        this.actor = this._grid;
+        this.actor = this._list;
         this.displayControl = new Big.Box({ background_color: ITEM_DISPLAY_BACKGROUND_COLOR,
-                                            corner_radius: 4,
-                                            height: 24,
                                             spacing: 12,
                                             orientation: Big.BoxOrientation.HORIZONTAL});
 
-        this._availableWidthForItemDetails = this._columnWidth;
-        this._availableHeightForItemDetails = this._height;
-        this.selectedItemDetails = new Big.Box({});     
+        this._availableWidthForItemDetails = width;
+        this.selectedItemDetails = new Big.Box({});
     },
 
     //// Public methods ////
@@ -557,48 +443,20 @@ GenericDisplay.prototype = {
         this._selectIndex(-1);
     },
 
-    // Hides the preview if any item has one being displayed.
-    hidePreview: function() {
-        for (itemId in this._displayedItems) {
-            let item = this._displayedItems[itemId];
-            item.hidePreview();
-        }
-    },
-
     // Returns true if the display has any displayed items.
     hasItems: function() {
         return this._displayedItemsCount > 0;
     },
 
-    // Readjusts display layout and the items displayed based on the new dimensions.
-    setExpanded: function(expanded, baseWidth, expandWidth, height, numberOfColumns) {
-        this._expanded = expanded;
-        this._numberOfColumns = numberOfColumns;
-        this._setDimensionsAndMaxItems(baseWidth, expandWidth, height);
-        this._grid.width = this._width;
-        this._grid.height = this._height;
-        this._pageDisplayed = 0;
-        this._displayMatchedItems(true);
-        let gridWidth = this._width;
-        let sideArea = this.getSideArea();
-        if (sideArea) {
-            if (expanded)
-                sideArea.show();
-            else
-                sideArea.hide();
-        }
-        this.emit('expanded');
-    },
-
     // Updates the displayed items and makes the display actor visible.
     show: function() {
-        this._grid.show();
+        this._list.show();
         this._redisplay(true);
     },
 
     // Hides the display actor.
     hide: function() {
-        this._grid.hide();
+        this._list.hide();
         this._filterReset();
         this._removeAllDisplayItems();
     },
@@ -627,9 +485,7 @@ GenericDisplay.prototype = {
         let hadSelected = this.hasSelected();
 
         this._removeAllDisplayItems();
-
-        for (let i = this._maxItemsPerPage * this._pageDisplayed; i < this._matchedItems.length && i < this._maxItemsPerPage * (this._pageDisplayed + 1); i++) {
-            
+        for (let i = 0; i < this._matchedItems.length; i++) {
             this._addDisplayItem(this._matchedItems[i]);
         }
 
@@ -638,20 +494,18 @@ GenericDisplay.prototype = {
             this.selectFirstItem();
         }
 
-        this._updateDisplayControl(resetDisplayControl);
-
         // We currently redisplay matching items and raise the sideshow as part of two different callbacks.
-        // Checking what is under the pointer after a timeout allows us to not merge these callbacks into one, at least for now.  
-        Mainloop.timeout_add(5, 
+        // Checking what is under the pointer after a timeout allows us to not merge these callbacks into one, at least for now.
+        Mainloop.timeout_add(5,
                              Lang.bind(this,
                                        function() {
-                                           // Check if the pointer is over one of the items and display the preview pop-up if it is.
+                                           // Check if the pointer is over one of the items and display the information button if it is.
                                            let [child, x, y, mask] = Gdk.Screen.get_default().get_root_window().get_pointer();
                                            let global = Shell.Global.get();
                                            let actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE,
                                                                                      x, y);
                                            if (actor != null) {
-                                               let item = this._findDisplayedByActor(actor.get_parent());
+                                               let item = this._findDisplayedByActor(actor);
                                                if (item != null) {
                                                    item.onDrawnUnderPointer();
                                                }
@@ -669,10 +523,9 @@ GenericDisplay.prototype = {
         }
 
         let itemInfo = this._allItems[itemId];
-        let displayItem = this._createDisplayItem(itemInfo);
-        displayItem.setShowPreview(true);
+        let displayItem = this._createDisplayItem(itemInfo, this._width);
 
-        displayItem.connect('activate', 
+        displayItem.connect('activate',
                             Lang.bind(this,
                                       function() {
                                           // update the selection
@@ -686,7 +539,7 @@ GenericDisplay.prototype = {
                                           // update the selection
                                           this._selectIndex(this._getIndexOfDisplayedActor(displayItem.actor));
                                       }));
-        this._grid.add_actor(displayItem.actor);
+        this._list.add_actor(displayItem.actor);
         this._displayedItems[itemId] = displayItem;
         this._displayedItemsCount++;
     },
@@ -696,38 +549,14 @@ GenericDisplay.prototype = {
         let displayItem = this._displayedItems[itemId];
         let displayItemIndex = this._getIndexOfDisplayedActor(displayItem.actor);
 
-        if (this.hasSelected() && (this._displayedItemsCount == 1 || !this._grid.visible)) { 
+        if (this.hasSelected() && (this._displayedItemsCount == 1 || !this._list.visible)) {
             this.unsetSelected();
         } else if (this.hasSelected() && displayItemIndex < this._selectedIndex) {
             this.selectUp();
         } 
 
-        if (displayItem.dragActor) {
-            // The user might be handling a dragActor when the list of items 
-            // changes (for example, if the dragging caused us to transition
-            // from an expanded overlay view to the regular view). So we need
-            // to keep the item around so that the drag and drop action initiated
-            // by the user can be completed. However, we remove the item from the list.
-            // 
-            // For some reason, just removing the displayItem.actor
-            // is not enough to get displayItem._icon.visible
-            // to return false, so we hide the display item and
-            // all its children first. (We check displayItem._icon.visible
-            // when deciding if a dragActor has a place to snap back to
-            // in case the drop was not accepted by any actor.)
-            displayItem.actor.hide_all();
-            this._grid.remove_actor(displayItem.actor);
-            // We should not destroy the item up-front, because that would also
-            // destroy the icon that was used to clone the image for the drag actor.
-            // We destroy it once the dragActor is destroyed instead.             
-            displayItem.dragActor.connect('destroy',
-                                          function(item) {
-                                              displayItem.destroy();
-                                          });
-           
-        } else {
-            displayItem.destroy();
-        }
+        displayItem.destroy();
+
         delete this._displayedItems[itemId];
         this._displayedItemsCount--;        
     },
@@ -760,16 +589,16 @@ GenericDisplay.prototype = {
      *             their own while the user was browsing through the result pages.
      */
     _redisplay: function(resetPage) {
-        if (!this._grid.visible)
+        if (!this._list.visible)
             return;
-        
+
         if (!this._filterActive())
             this._setDefaultList();
         else
             this._doSearchFilter();
 
         if (resetPage)
-            this._pageDisplayed = 0;
+            this._list.page = 0;
 
         this._displayMatchedItems(true);
 
@@ -804,32 +633,11 @@ GenericDisplay.prototype = {
     },
 
     // Creates a display item based on itemInfo.
-    _createDisplayItem: function(itemInfo) {
+    _createDisplayItem: function(itemInfo, width) {
         throw new Error("Not implemented");
     },
 
     //// Private methods ////
-
-    // Sets this._width, this._height, this._columnWidth, and this._maxItemsPerPage based on the 
-    // space available for the display, number of columns, and the number of items it can fit.
-    _setDimensionsAndMaxItems: function(baseWidth, expandWidth, height) {
-        this._width = baseWidth + expandWidth;
-        let gridWidth;
-        let sideArea = this.getSideArea();
-        if (this._expanded && sideArea) {
-            gridWidth = expandWidth;
-            sideArea.width = baseWidth;
-            sideArea.height = this._height;
-        } else {
-            gridWidth = this._width;
-        }
-        this._columnWidth = (gridWidth - this._columnGap * (this._numberOfColumns - 1)) / this._numberOfColumns;
-        let maxItemsInColumn = Math.floor(height / ITEM_DISPLAY_HEIGHT);
-        this._maxItemsPerPage =  maxItemsInColumn * this._numberOfColumns;
-        this._height = maxItemsInColumn * ITEM_DISPLAY_HEIGHT;
-        this._grid.width = gridWidth;
-        this._grid.height = this._height;
-    },
 
     _getSearchMatchedItems: function() {
         let matchedItemsForSearch = {};
@@ -880,13 +688,12 @@ GenericDisplay.prototype = {
                 return 1;
             else
                 return this._compareItems(a, b);
-        }));        
+        }));
     },
 
-    // Displays the page specified by the pageNumber argument. The pageNumber is 0-based.
+    // Displays the page specified by the pageNumber argument.
     _displayPage: function(pageNumber) {
-        this._pageDisplayed = pageNumber;
-        this._displayMatchedItems(false);
+        this._list.page = pageNumber;
     },
 
     /*
@@ -900,29 +707,29 @@ GenericDisplay.prototype = {
     _updateDisplayControl: function(resetDisplayControl) {
         if (resetDisplayControl) {
             this.displayControl.remove_all();
-            let pageNumber = 0;
-            for (let i = 0; i < this._matchedItems.length; i = i + this._maxItemsPerPage) {
-                let pageControl = new Link.Link({ color: (pageNumber == this._pageDisplayed) ? DISPLAY_CONTROL_SELECTED_COLOR : ITEM_DISPLAY_DESCRIPTION_COLOR,
+            let nPages = this._list.n_pages;
+            let pageNumber = this._list.page;
+            for (let i = 0; i < nPages; i++) {
+                let pageControl = new Link.Link({ color: (i == pageNumber) ? DISPLAY_CONTROL_SELECTED_COLOR : ITEM_DISPLAY_DESCRIPTION_COLOR,
                                                   font_name: "Sans Bold 16px",
-                                                  text: (pageNumber + 1) + "",
+                                                  text: (i+1) + "",
                                                   height: LABEL_HEIGHT,
-                                                  reactive: (pageNumber == this._pageDisplayed) ? false : true});
+                                                  reactive: (i == pageNumber) ? false : true});
                 this.displayControl.append(pageControl.actor, Big.BoxPackFlags.NONE);
 
                 // we use pageNumberLocalScope to get the page number right in the callback function
-                let pageNumberLocalScope = pageNumber;         
+                let pageNumberLocalScope = i;
                 pageControl.connect('clicked',
                                     Lang.bind(this,
                                               function(o, event) {
                                                   this._displayPage(pageNumberLocalScope);
                                               }));
-                pageNumber ++; 
             }
         } else {
             let pageControlActors = this.displayControl.get_children();
-            for (let i = 0; i < pageControlActors.length; i++) { 
+            for (let i = 0; i < pageControlActors.length; i++) {
                 let pageControlActor = pageControlActors[i];
-                if (i == this._pageDisplayed) {
+                if (i == this._list.page) {
                     pageControlActor.color =  DISPLAY_CONTROL_SELECTED_COLOR;
                     pageControlActor.reactive = false;
                 } else {
@@ -933,10 +740,10 @@ GenericDisplay.prototype = {
         }
     },
 
-    // Returns a display item based on its index in the ordering of the 
+    // Returns a display item based on its index in the ordering of the
     // display children.
     _findDisplayedByIndex: function(index) {
-        let displayedActors = this._grid.get_children();
+        let displayedActors = this._list.get_children();
         let actor = displayedActors[index];
         return this._findDisplayedByActor(actor);
     },
@@ -956,9 +763,9 @@ GenericDisplay.prototype = {
     // Returns and index that the actor has in the ordering of the display's
     // children.
     _getIndexOfDisplayedActor: function(actor) {
-        let children = this._grid.get_children();
+        let children = this._list.get_children();
         for (let i = 0; i < children.length; i++) {
-            if (children[i] == actor) 
+            if (children[i] == actor)
                 return i;
         }
         return -1;

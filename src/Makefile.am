@@ -14,6 +14,7 @@ gnome-shell: gnome-shell.in
 	    -e "s|@libexecdir[@]|$(libexecdir)|" \
 	    -e "s|@libdir[@]|$(libdir)|" \
 	    -e "s|@pkgdatadir[@]|$(pkgdatadir)|" \
+	    -e "s|@sysconfdir[@]|$(sysconfdir)|" \
 	    $< > $@ && chmod a+x $@
 CLEANFILES += gnome-shell
 EXTRA_DIST += gnome-shell.in
@@ -62,6 +63,8 @@ libgnome_shell_la_SOURCES =			\
 	shell-embedded-window-private.h		\
 	shell-gtk-embed.c			\
 	shell-gtk-embed.h			\
+	shell-overflow-list.c		\
+	shell-overflow-list.h		\
 	shell-process.c				\
 	shell-process.h				\
 	shell-global.c				\

@@ -5,15 +5,22 @@ const Clutter = imports.gi.Clutter;
 const Pango = imports.gi.Pango;
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
+const Tidy = imports.gi.Tidy;
 const Shell = imports.gi.Shell;
 const Lang = imports.lang;
 const Signals = imports.signals;
+const Mainloop = imports.mainloop;
 
 const AppInfo = imports.misc.appInfo;
+const DND = imports.ui.dnd;
 const GenericDisplay = imports.ui.genericDisplay;
+const Workspaces = imports.ui.workspaces;
 
 const ENTERED_MENU_COLOR = new Clutter.Color();
 ENTERED_MENU_COLOR.from_pixel(0x00ff0022);
+
+const APP_ICON_SIZE = 48;
+const APP_PADDING = 18;
 
 const MENU_ICON_SIZE = 24;
 const MENU_SPACING = 15;
@@ -36,8 +43,11 @@ AppDisplayItem.prototype = {
         GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth); 
         this._appInfo = appInfo;
 
-        this._setItemInfo(appInfo.name, appInfo.description,
-                          appInfo.getIcon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE));
+        this._setItemInfo(appInfo.name, appInfo.description);
+    },
+
+    getId: function() {
+        return this._appInfo.appId;
     },
 
     //// Public method overrides ////
@@ -48,6 +58,11 @@ AppDisplayItem.prototype = {
     },
 
     //// Protected method overrides ////
+
+    // Returns an icon for the item.
+    _createIcon : function() {
+        return this._appInfo.createIcon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE);
+    },
 
     // Ensures the preview icon is created.
     _ensurePreviewIconCreated : function() {
@@ -147,22 +162,22 @@ MenuItem.prototype = {
 }
 Signals.addSignalMethods(MenuItem.prototype);
 
+
 /* This class represents a display containing a collection of application items.
  * The applications are sorted based on their popularity by default, and based on
  * their name if some search filter is applied.
  *
  * width - width available for the display
- * height - height available for the display
  */
-function AppDisplay(width, height, numberOfColumns, columnGap) {
-    this._init(width, height, numberOfColumns, columnGap);
+function AppDisplay(width) {
+    this._init(width);
 }
 
 AppDisplay.prototype = {
     __proto__:  GenericDisplay.GenericDisplay.prototype,
 
-    _init : function(width, height, numberOfColumns, columnGap) {
-        GenericDisplay.GenericDisplay.prototype._init.call(this, width, height, numberOfColumns, columnGap);
+    _init : function(width) {
+        GenericDisplay.GenericDisplay.prototype._init.call(this, width);
 
         this._menus = [];
         this._menuDisplays = [];
@@ -173,16 +188,15 @@ AppDisplay.prototype = {
         this._appMonitor = Shell.AppMonitor.get_default();
         this._appSystem = Shell.AppSystem.get_default();
         this._appsStale = true;
-        this._appSystem.connect('changed', Lang.bind(this, function(appSys) {
+        this._appSystem.connect('installed-changed', Lang.bind(this, function(appSys) {
             this._appsStale = true;
-            // We still need to determine what events other than search can trigger
-            // a change in the set of applications that are being shown while the
-            // user in in the overlay mode, however let's redisplay just in case.
             this._redisplay(false);
             this._redisplayMenus();
         }));
+        this._appSystem.connect('favorites-changed', Lang.bind(this, function(appSys) {
+            this._redisplay(false);
+        }));
         this._appMonitor.connect('changed', Lang.bind(this, function(monitor) {
-            this._appsStale = true;
             this._redisplay(false);
         }));
 
@@ -339,21 +353,12 @@ AppDisplay.prototype = {
             this._addAppForId(appId);
         }
 
-        // Some applications, such as Evince, might not be in the menus,
-        // but might be returned by the applications monitor as most used
-        // applications, in which case we include them.
-        let mostUsedAppInfos = AppInfo.getMostUsedApps(MAX_ITEMS);
-        for (let i = 0; i < mostUsedAppInfos.length; i++) {
-            let appInfo = mostUsedAppInfos[i];
-            this._addApp(appInfo);
-        }         
-
         this._appsStale = false;
     },
 
     // Sets the list of the displayed items based on the most used apps.
     _setDefaultList : function() {
-        let matchedInfos = AppInfo.getMostUsedApps(MAX_ITEMS);
+        let matchedInfos = AppInfo.getTopApps(MAX_ITEMS);
         this._matchedItems = matchedInfos.map(function(info) { return info.appId; });
     },
 
@@ -424,9 +429,246 @@ AppDisplay.prototype = {
     },
 
     // Creates an AppDisplayItem based on itemInfo, which is expected be an AppInfo object.
-    _createDisplayItem: function(itemInfo) {
-        return new AppDisplayItem(itemInfo, this._columnWidth);
+    _createDisplayItem: function(itemInfo, width) {
+        return new AppDisplayItem(itemInfo, width);
     }
 };
 
 Signals.addSignalMethods(AppDisplay.prototype);
+
+function WellDisplayItem(appInfo, isFavorite) {
+    this._init(appInfo, isFavorite);
+}
+
+WellDisplayItem.prototype = {
+    _init : function(appInfo, isFavorite) {
+        this.appInfo = appInfo;
+
+        this.isFavorite = isFavorite;
+
+        this.actor = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                   corner_radius: 2,
+                                   border: 0,
+                                   padding: 1,
+                                   border_color: GenericDisplay.ITEM_DISPLAY_SELECTED_BACKGROUND_COLOR,
+                                   width: APP_ICON_SIZE + APP_PADDING,
+                                   reactive: true });
+        this.actor.connect('enter-event', Lang.bind(this,
+            function(o, event) {
+                this.actor.border = 1;
+                this.actor.padding = 0;
+                return false;
+            }));
+        this.actor.connect('leave-event', Lang.bind(this,
+            function(o, event) {
+                this.actor.border = 0;
+                this.actor.padding = 1;
+                return false;
+            }));
+        this.actor._delegate = this;
+        this.actor.connect('button-release-event', Lang.bind(this, function (b, e) {
+            this.launch();
+            this.emit('activated');
+        }));
+
+        let draggable = DND.makeDraggable(this.actor);
+
+        let iconBox = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                    x_align: Big.BoxAlignment.CENTER });
+        this._icon = appInfo.createIcon(APP_ICON_SIZE);
+        iconBox.append(this._icon, Big.BoxPackFlags.NONE);
+
+        this.actor.append(iconBox, Big.BoxPackFlags.NONE);
+
+        let count = Shell.AppMonitor.get_default().get_window_count(appInfo.appId);
+
+        let nameBox = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                    x_align: Big.BoxAlignment.CENTER });
+        this._name = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
+                                        font_name: "Sans 12px",
+                                        ellipsize: Pango.EllipsizeMode.END,
+                                        line_alignment: Pango.Alignment.CENTER,
+                                        line_wrap: true,
+                                        line_wrap_mode: Pango.WrapMode.WORD_CHAR,
+                                        text: appInfo.name });
+        nameBox.append(this._name, Big.BoxPackFlags.EXPAND);
+        if (count > 0) {
+            let runningBox = new Big.Box({ /* border_color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
+                                           border: 1,
+                                           padding: 1 */ });
+            runningBox.append(nameBox, Big.BoxPackFlags.EXPAND);
+            this.actor.append(runningBox, Big.BoxPackFlags.NONE);
+        } else {
+            this.actor.append(nameBox, Big.BoxPackFlags.NONE);
+        }
+    },
+
+    // Opens an application represented by this display item.
+    launch : function() {
+        this.appInfo.launch();
+    },
+
+    // Draggable interface - FIXME deduplicate with GenericDisplay
+    getDragActor: function(stageX, stageY) {
+        this.dragActor = this.appInfo.createIcon(APP_ICON_SIZE);
+
+        // If the user dragged from the icon itself, then position
+        // the dragActor over the original icon. Otherwise center it
+        // around the pointer
+        let [iconX, iconY] = this._icon.get_transformed_position();
+        let [iconWidth, iconHeight] = this._icon.get_transformed_size();
+        if (stageX > iconX && stageX <= iconX + iconWidth &&
+            stageY > iconY && stageY <= iconY + iconHeight)
+            this.dragActor.set_position(iconX, iconY);
+        else
+            this.dragActor.set_position(stageX - this.dragActor.width / 2, stageY - this.dragActor.height / 2);
+        return this.dragActor;
+    },
+
+    // Returns the original icon that is being used as a source for the cloned texture
+    // that represents the item as it is being dragged.
+    getDragActorSource: function() {
+        return this._icon;
+    }
+};
+
+Signals.addSignalMethods(WellDisplayItem.prototype);
+
+function WellArea(width, isFavorite) {
+    this._init(width, isFavorite);
+}
+
+WellArea.prototype = {
+    _init : function(width, isFavorite) {
+        this.isFavorite = isFavorite;
+
+        this._grid = new Tidy.Grid({ width: width, row_gap: 4 });
+        this._grid._delegate = this;
+
+        this.actor = this._grid;
+    },
+
+    redisplay: function (infos) {
+        let children;
+
+        children = this._grid.get_children();
+        children.forEach(Lang.bind(this, function (v) {
+            v.destroy();
+        }));
+
+        for (let i = 0; i < infos.length; i++) {
+            let display = new WellDisplayItem(infos[i], this.isFavorite);
+            display.connect('activated', Lang.bind(this, function (display) {
+                this.emit('activated', display);
+            }));
+            this.actor.add_actor(display.actor);
+        };
+    },
+
+    // Draggable target interface
+    acceptDrop : function(source, actor, x, y, time) {
+        let global = Shell.Global.get();
+
+        let id = null;
+        if (source instanceof WellDisplayItem) {
+            id = source.appInfo.appId;
+        } else if (source instanceof AppDisplayItem) {
+            id = source.getId();
+        } else if (source instanceof Workspaces.WindowClone) {
+            let appMonitor = Shell.AppMonitor.get_default();
+            id = appMonitor.get_window_id(source.metaWindow);
+            if (id === null)
+                return false;
+        } else {
+            return false;
+        }
+
+        let appSystem = Shell.AppSystem.get_default();
+
+        if (source.isFavorite && (!this.isFavorite)) {
+            Mainloop.idle_add(function () {
+                appSystem.remove_favorite(id);
+            });
+        } else if ((!source.isFavorite) && this.isFavorite) {
+            Mainloop.idle_add(function () {
+                appSystem.add_favorite(id);
+            });
+        } else {
+            return false;
+        }
+
+        return true;
+    }
+}
+
+Signals.addSignalMethods(WellArea.prototype);
+
+function AppWell(width) {
+    this._init(width);
+}
+
+AppWell.prototype = {
+    _init : function(width) {
+        this._menus = [];
+        this._menuDisplays = [];
+
+        this.actor = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                   spacing: 4,
+                                   width: width });
+
+        this._appSystem = Shell.AppSystem.get_default();
+        this._appMonitor = Shell.AppMonitor.get_default();
+
+        this._appSystem.connect('installed-changed', Lang.bind(this, function(appSys) {
+            this._redisplay();
+        }));
+        this._appSystem.connect('favorites-changed', Lang.bind(this, function(appSys) {
+            this._redisplay();
+        }));
+        this._appMonitor.connect('changed', Lang.bind(this, function(monitor) {
+            this._redisplay();
+        }));
+
+        this._favoritesArea = new WellArea(width, true);
+        this._favoritesArea.connect('activated', Lang.bind(this, function (a, display) {
+            this.emit('activated');
+        }));
+        this.actor.append(this._favoritesArea.actor, Big.BoxPackFlags.NONE);
+
+        this._runningBox = new Big.Box({ border_color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
+                                         border_top: 1,
+                                         corner_radius: 3,
+                                         padding: GenericDisplay.PREVIEW_BOX_PADDING });
+        this._runningArea = new WellArea(width, false);
+        this._runningArea.connect('activated', Lang.bind(this, function (a, display) {
+            this.emit('activated');
+        }));
+        this._runningBox.append(this._runningArea.actor, Big.BoxPackFlags.EXPAND);
+        this.actor.append(this._runningBox, Big.BoxPackFlags.NONE);
+
+        this._redisplay();
+    },
+
+    _redisplay: function() {
+        let arrayToObject = function(a) {
+            let o = {};
+            for (let i = 0; i < a.length; i++)
+                o[a[i]] = 1;
+            return o;
+        };
+        let favorites = AppInfo.getFavorites();
+        let favoriteIds = arrayToObject(favorites.map(function (e) { return e.appId; }));
+        let running = AppInfo.getRunning().filter(function (e) {
+            return !(e.appId in favoriteIds);
+        });
+        this._favoritesArea.redisplay(favorites);
+        this._runningArea.redisplay(running);
+        // If it's empty, we hide it so the top border doesn't show up
+        if (running.length == 0)
+          this._runningBox.hide();
+        else
+          this._runningBox.show();
+    }
+};
+
+Signals.addSignalMethods(AppWell.prototype);

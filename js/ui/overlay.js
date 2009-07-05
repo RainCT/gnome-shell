@@ -26,24 +26,17 @@ ROOT_OVERLAY_COLOR.from_pixel(0x000000bb);
 const BACKGROUND_SCALE = 2;
 
 const LABEL_HEIGHT = 16;
-// We use SIDESHOW_PAD for the padding on the left side of the sideshow and as a gap
-// between sideshow columns.
-const SIDESHOW_PAD = 6;
-const SIDESHOW_MIN_WIDTH = 250;
-const SIDESHOW_SECTION_PADDING_TOP = 6;
-const SIDESHOW_SECTION_SPACING = 6;
-const SIDESHOW_COLUMNS = 1;
-const DETAILS_CORNER_RADIUS = 5;
-const DETAILS_BORDER_WIDTH = 1;
-const DETAILS_PADDING = 6;
+const DASH_MIN_WIDTH = 250;
+const DASH_OUTER_PADDING = 4;
+const DASH_SECTION_PADDING = 6;
+const DASH_SECTION_SPACING = 6;
+const DASH_CORNER_RADIUS = 5;
 // This is the height of section components other than the item display.
-const SIDESHOW_SECTION_MISC_HEIGHT = (LABEL_HEIGHT + SIDESHOW_SECTION_SPACING) * 2 + SIDESHOW_SECTION_PADDING_TOP;
-const SIDESHOW_SEARCH_BG_COLOR = new Clutter.Color();
-SIDESHOW_SEARCH_BG_COLOR.from_pixel(0xffffffff);
-const SIDESHOW_TEXT_COLOR = new Clutter.Color();
-SIDESHOW_TEXT_COLOR.from_pixel(0xffffffff);
-const DETAILS_BORDER_COLOR = new Clutter.Color();
-DETAILS_BORDER_COLOR.from_pixel(0xffffffff);
+const DASH_SECTION_MISC_HEIGHT = (LABEL_HEIGHT + DASH_SECTION_SPACING) * 2 + DASH_SECTION_PADDING;
+const DASH_SEARCH_BG_COLOR = new Clutter.Color();
+DASH_SEARCH_BG_COLOR.from_pixel(0xffffffff);
+const DASH_TEXT_COLOR = new Clutter.Color();
+DASH_TEXT_COLOR.from_pixel(0xffffffff);
 
 // Time for initial animation going into overlay mode
 const ANIMATION_TIME = 0.25;
@@ -68,23 +61,49 @@ const ROWS_REGULAR_SCREEN = 8;
 const COLUMNS_WIDE_SCREEN = 5;
 const ROWS_WIDE_SCREEN = 10;
 
-// Padding around workspace grid / Spacing between Sideshow and Workspaces
+// Padding around workspace grid / Spacing between Dash and Workspaces
 const WORKSPACE_GRID_PADDING = 12;
 
 const COLUMNS_FOR_WORKSPACES_REGULAR_SCREEN = 3;
 const ROWS_FOR_WORKSPACES_REGULAR_SCREEN = 6;
-const WORKSPACES_X_FACTOR_ASIDE_MODE_REGULAR_SCREEN = 4 - 0.25;
-const EXPANDED_SIDESHOW_COLUMNS_REGULAR_SCREEN = 2;
 
 const COLUMNS_FOR_WORKSPACES_WIDE_SCREEN = 4;
 const ROWS_FOR_WORKSPACES_WIDE_SCREEN = 8;
-const WORKSPACES_X_FACTOR_ASIDE_MODE_WIDE_SCREEN = 5 - 0.25;
-const EXPANDED_SIDESHOW_COLUMNS_WIDE_SCREEN = 3;
 
 // A multi-state; PENDING is used during animations
 const STATE_ACTIVE = true;
 const STATE_PENDING_INACTIVE = false;
 const STATE_INACTIVE = false;
+
+// The dash has a slightly transparent blue background with a gradient.
+const DASH_LEFT_COLOR = new Clutter.Color();
+DASH_LEFT_COLOR.from_pixel(0x324c6fbb);
+const DASH_MIDDLE_COLOR = new Clutter.Color();
+DASH_MIDDLE_COLOR.from_pixel(0x324c6faa);
+const DASH_RIGHT_COLOR = new Clutter.Color();
+DASH_RIGHT_COLOR.from_pixel(0x324c6fcc);
+
+const DASH_BORDER_COLOR = new Clutter.Color();
+DASH_BORDER_COLOR.from_pixel(0x213b5dff);
+
+const DASH_BORDER_WIDTH = 2;
+
+// The results and details panes have a somewhat transparent blue background with a gradient.
+const PANE_LEFT_COLOR = new Clutter.Color();
+PANE_LEFT_COLOR.from_pixel(0x324c6ff4);
+const PANE_MIDDLE_COLOR = new Clutter.Color();
+PANE_MIDDLE_COLOR.from_pixel(0x324c6ffa);
+const PANE_RIGHT_COLOR = new Clutter.Color();
+PANE_RIGHT_COLOR.from_pixel(0x324c6ff4);
+
+const SHADOW_COLOR = new Clutter.Color();
+SHADOW_COLOR.from_pixel(0x00000033);
+const TRANSPARENT_COLOR = new Clutter.Color();
+TRANSPARENT_COLOR.from_pixel(0x00000000);
+
+const SHADOW_WIDTH = 6;
+
+const NUMBER_OF_SECTIONS_IN_SEARCH = 2;
 
 let wideScreen = false;
 let displayGridColumnWidth = null;
@@ -95,15 +114,14 @@ function SearchEntry(width) {
 }
 
 SearchEntry.prototype = {
-    _init : function(width) {
+    _init : function() {
         this.actor = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
                                    y_align: Big.BoxAlignment.CENTER,
-                                   background_color: SIDESHOW_SEARCH_BG_COLOR,
+                                   background_color: DASH_SEARCH_BG_COLOR,
                                    corner_radius: 4,
                                    spacing: 4,
                                    padding_left: 4,
                                    padding_right: 4,
-                                   width: width,
                                    height: 24
                                  });
 
@@ -128,45 +146,135 @@ SearchEntry.prototype = {
     }
 };
 
-function Sideshow() {
+function ItemResults(resultsWidth, resultsHeight, displayClass, labelText) {
+    this._init(resultsWidth, resultsHeight, displayClass, labelText);
+}
+
+ItemResults.prototype = {
+    _init: function(resultsWidth, resultsHeight, displayClass, labelText) {
+        this._resultsWidth = resultsWidth;
+        this._resultsHeight = resultsHeight;
+
+        this.actor = new Big.Box({ height: resultsHeight,
+                                   padding: DASH_SECTION_PADDING + DASH_BORDER_WIDTH,
+                                   spacing: DASH_SECTION_SPACING });
+
+        this._resultsText = new Clutter.Text({ color: DASH_TEXT_COLOR,
+                                               font_name: "Sans Bold 14px",
+                                               text: labelText });
+        this.actor.append(this._resultsText, Big.BoxPackFlags.NONE);
+
+        // LABEL_HEIGHT is the height of this._resultsText and GenericDisplay.LABEL_HEIGHT is the height
+        // of the display controls.
+        this._displayHeight = resultsHeight - LABEL_HEIGHT - GenericDisplay.LABEL_HEIGHT - DASH_SECTION_SPACING * 2;
+        this.display = new displayClass(resultsWidth);
+
+        this.actor.append(this.display.actor, Big.BoxPackFlags.EXPAND);
+
+        this.controlBox = new Big.Box({ x_align: Big.BoxAlignment.CENTER });
+        this.controlBox.append(this.display.displayControl, Big.BoxPackFlags.NONE);
+
+        this.actor.append(this.controlBox, Big.BoxPackFlags.END);
+    },
+
+    _setSearchMode: function() {
+        this.actor.height = this._resultsHeight /  NUMBER_OF_SECTIONS_IN_SEARCH;
+        let displayHeight = this._displayHeight - this._resultsHeight * (NUMBER_OF_SECTIONS_IN_SEARCH - 1) /  NUMBER_OF_SECTIONS_IN_SEARCH;
+        this.actor.remove_all();
+        this.actor.append(this._resultsText, Big.BoxPackFlags.NONE);
+        this.actor.append(this.display.actor, Big.BoxPackFlags.EXPAND);
+        this.actor.append(this.controlBox, Big.BoxPackFlags.END);
+    },
+
+    _unsetSearchMode: function() {
+        this.actor.height = this._resultsHeight;
+        this.actor.remove_all();
+        this.actor.append(this._resultsText, Big.BoxPackFlags.NONE);
+        this.actor.append(this.display.actor, Big.BoxPackFlags.EXPAND);
+        this.actor.append(this.controlBox, Big.BoxPackFlags.END);
+    }
+}
+
+function Dash() {
     this._init();
 }
 
-Sideshow.prototype = {
+Dash.prototype = {
     _init : function() {
         let me = this;
 
-        this._moreAppsMode = STATE_INACTIVE;
-        this._moreDocsMode = STATE_INACTIVE;
-
-        let asideXFactor = wideScreen ? WORKSPACES_X_FACTOR_ASIDE_MODE_WIDE_SCREEN : WORKSPACES_X_FACTOR_ASIDE_MODE_REGULAR_SCREEN; 
-        this._expandedSideshowColumns = wideScreen ? EXPANDED_SIDESHOW_COLUMNS_WIDE_SCREEN : EXPANDED_SIDESHOW_COLUMNS_REGULAR_SCREEN;       
+        this._moreAppsMode = false;
+        this._moreDocsMode = false;
 
         this._width = displayGridColumnWidth;
-        this._displayWidth = this._width - SIDESHOW_PAD;
 
-        this._expandedWidth = displayGridColumnWidth * asideXFactor;
+        this._displayWidth = displayGridColumnWidth - DASH_SECTION_PADDING * 2;
+        this._resultsWidth = displayGridColumnWidth;  
+        this._detailsWidth = displayGridColumnWidth * 2;  
 
-        // this figures out the additional width we can give to the display in the 'More' mode,
-        // assuming that we want to keep the columns the same width in both modes
-        this._additionalWidth = (this._width / SIDESHOW_COLUMNS) *
-                                (this._expandedSideshowColumns - SIDESHOW_COLUMNS);
-
-        let bottomHeight = displayGridRowHeight / 2;
+        let bottomHeight = DASH_SECTION_PADDING;
 
         let global = Shell.Global.get();
 
-        let previewWidth = this._expandedWidth - this._width -
-                           this._additionalWidth - SIDESHOW_SECTION_SPACING;
+        let resultsHeight = global.screen_height - Panel.PANEL_HEIGHT - DASH_SECTION_PADDING - bottomHeight;
+        let detailsHeight = global.screen_height - Panel.PANEL_HEIGHT - DASH_SECTION_PADDING - bottomHeight;
 
-        let previewHeight = global.screen_height - Panel.PANEL_HEIGHT - SIDESHOW_PAD - bottomHeight;
-
-        this.actor = new Clutter.Group();
+        this.actor = new Clutter.Group({});
         this.actor.height = global.screen_height;
-        this._searchEntry = new SearchEntry(this._displayWidth);
-        this.actor.add_actor(this._searchEntry.actor);
 
-        this._searchEntry.actor.set_position(SIDESHOW_PAD, Panel.PANEL_HEIGHT + SIDESHOW_PAD);
+
+        // dashPane, as well as results and details panes need to be reactive so that the clicks in unoccupied places on them
+        // are not passed to the transparent background underneath them. This background is used for the workspaces area when
+        // the additional dash panes are being shown and it handles clicks by closing the additional panes, so that the user
+        // can interact with the workspaces. However, this behavior is not desirable when the click is actually over a pane.
+        //
+        // We have to make the individual panes reactive instead of making the whole dash actor reactive because the width
+        // of the Group actor ends up including the width of its hidden children, so we were getting a reactive object as
+        // wide as the details pane that was blocking the clicks to the workspaces underneath it even when the details pane
+        // was actually hidden. 
+        let dashPane = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                     x: 0,
+                                     y: Panel.PANEL_HEIGHT + DASH_SECTION_PADDING,
+                                     width: this._width + SHADOW_WIDTH,
+                                     height: global.screen_height - Panel.PANEL_HEIGHT - DASH_SECTION_PADDING - bottomHeight,
+                                     reactive: true});
+
+        let dashBackground = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                           width: this._width,
+                                           height: global.screen_height - Panel.PANEL_HEIGHT - DASH_SECTION_PADDING - bottomHeight,
+                                           corner_radius: DASH_CORNER_RADIUS,
+                                           border: DASH_BORDER_WIDTH,
+                                           border_color: DASH_BORDER_COLOR });
+
+        dashPane.append(dashBackground, Big.BoxPackFlags.EXPAND);
+        
+        let dashLeft = global.create_horizontal_gradient(DASH_LEFT_COLOR,
+                                                         DASH_MIDDLE_COLOR);
+        let dashRight = global.create_horizontal_gradient(DASH_MIDDLE_COLOR,
+                                                          DASH_RIGHT_COLOR);
+        let dashShadow = global.create_horizontal_gradient(SHADOW_COLOR,
+                                                           TRANSPARENT_COLOR);
+        dashShadow.set_width(SHADOW_WIDTH);
+        
+        dashBackground.append(dashLeft, Big.BoxPackFlags.EXPAND);
+        dashBackground.append(dashRight, Big.BoxPackFlags.EXPAND);
+        dashPane.append(dashShadow, Big.BoxPackFlags.NONE);
+
+        this.actor.add_actor(dashPane);
+
+        this.dashOuterContainer = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                               x: 0,
+                                               y: dashPane.y + DASH_BORDER_WIDTH,
+                                               width: this._width,
+                                               height: global.screen_height - Panel.PANEL_HEIGHT - DASH_SECTION_PADDING - bottomHeight,
+                                               padding: DASH_OUTER_PADDING
+                                             });
+        this.actor.add_actor(this.dashOuterContainer);
+        this.dashContainer = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL });
+        this.dashOuterContainer.append(this.dashContainer, Big.BoxPackFlags.EXPAND);
+
+        this._searchEntry = new SearchEntry();
+        this.dashContainer.append(this._searchEntry.actor, Big.BoxPackFlags.NONE);
 
         this._searchQueued = false;
         this._searchEntry.entry.connect('text-changed', function (se, prop) {
@@ -177,192 +285,231 @@ Sideshow.prototype = {
                 // Strip leading and trailing whitespace
                 let text = me._searchEntry.entry.text.replace(/^\s+/g, "").replace(/\s+$/g, "");
                 me._searchQueued = false;
-                me._appDisplay.setSearch(text);
-                me._docDisplay.setSearch(text);
+                me._resultsAppsSection.display.setSearch(text);
+                me._resultsDocsSection.display.setSearch(text);
+                if (text == '')
+                    me._unsetSearchMode();
+                else 
+                    me._setSearchMode();
+                   
                 return false;
             });
         });
         this._searchEntry.entry.connect('activate', function (se) {
             // only one of the displays will have an item selected, so it's ok to
-            // call activateSelected() on both of them
-            me._appDisplay.activateSelected();
+            // call activateSelected() on all of them
             me._docDisplay.activateSelected();
+            me._resultsAppsSection.display.activateSelected();
+            me._resultsDocsSection.display.activateSelected();
             return true;
         });
         this._searchEntry.entry.connect('key-press-event', function (se, e) {
             let symbol = Shell.get_event_key_symbol(e);
             if (symbol == Clutter.Escape) {
-                // We always want to hide the previews when the user hits Escape.
-                // If something that should have a preview gets displayed under 
-                // the mouse pointer afterwards the preview will get redisplayed.
-                me._appDisplay.hidePreview(); 
-                me._docDisplay.hidePreview(); 
-                // Escape will keep clearing things back to the desktop.  First, if
+                // Escape will keep clearing things back to the desktop. First, if
                 // we have active text, we remove it.
-                if (me._searchEntry.text != '')
-                    me._searchEntry.text = '';
-                // Next, if we're in one of the "more" modes, close it
-                else if (me._moreAppsMode)
-                    me._unsetMoreAppsMode();
-                else if (me._moreDocsMode)
-                    me._unsetMoreDocsMode();
-                else
+                if (me._searchEntry.entry.text != '')
+                    me._searchEntry.entry.text = '';
+                // Next, if we're in one of the "more" modes or showing the details pane, close them
+                else if (me._moreAppsMode || me._moreDocsMode || me._detailsShowing())
+                    me.unsetMoreMode();
                 // Finally, just close the overlay entirely
+                else
                     me.emit('activated');
                 return true;
             } else if (symbol == Clutter.Up) {
                 // selectUp and selectDown wrap around in their respective displays
-                // too, but there doesn't seem to be any flickering if we first select 
+                // too, but there doesn't seem to be any flickering if we first select
                 // something in one display, but then unset the selection, and move
                 // it to the other display, so it's ok to do that.
-                if (me._moreAppsMode)
-                    me._appDisplay.selectUp();
-                else if (me._moreDocsMode)
-                    me._docDisplay.selectUp();
-                else if (me._appDisplay.hasSelected() && !me._appDisplay.selectUp() && me._docDisplay.hasItems()) {
-                    me._appDisplay.unsetSelected();
-                    me._docDisplay.selectLastItem();
-                } else if (me._docDisplay.hasSelected() && !me._docDisplay.selectUp() && me._appDisplay.hasItems()) {
-                    me._docDisplay.unsetSelected();
-                    me._appDisplay.selectLastItem();
-                }
-                return true;
-            } else if (symbol == Clutter.Down) {
-                if (me._moreAppsMode)
-                    me._appDisplay.selectDown();
-                else if (me._moreDocsMode)
-                    me._docDisplay.selectDown();
-                else if (me._appDisplay.hasSelected() && !me._appDisplay.selectDown() && me._docDisplay.hasItems()) {
-                    me._appDisplay.unsetSelected();
-                    me._docDisplay.selectFirstItem();
-                } else if (me._docDisplay.hasSelected() && !me._docDisplay.selectDown() && me._appDisplay.hasItems()) {
-                    me._docDisplay.unsetSelected();
-                    me._appDisplay.selectFirstItem();
-                }
-                return true;
-            } else if (me._moreAppsMode && me._searchEntry.text == '') {
-                if (symbol == Clutter.Right) {
-                    me._appDisplay.moveRight();
-                    return true;
-                } else if (symbol == Clutter.Left) {
-                    me._appDisplay.moveLeft();
-                    return true;
-                }
-                return false;
-            } else if (symbol == Clutter.Right && me._searchEntry.text == '') {
-                if (me._appDisplay.hasSelected())
-                    me._setMoreAppsMode();
+                if (me._resultsDocsSection.display.hasSelected())
+                  me._resultsDocsSection.display.selectUp();
+                else if (me._resultsAppsSection.display.hasItems())
+                  me._resultsAppsSection.display.selectUp();
                 else
-                    me._setMoreDocsMode();
-                return true;
+                  me._resultsDocsSection.display.selectUp();
+            } else if (symbol == Clutter.Down) {
+                if (me._resultsDocsSection.display.hasSelected())
+                  me._resultsDocsSection.display.selectDown();
+                else if (me._resultsAppsSection.display.hasItems())
+                  me._resultsAppsSection.display.selectDown();
+                else
+                  me._resultsDocsSection.display.selectDown();
             }
             return false;
         });
 
-        this._appsSection = new Big.Box({ x: SIDESHOW_PAD,
-                                          y: this._searchEntry.actor.y + this._searchEntry.actor.height,
-                                          padding_top: SIDESHOW_SECTION_PADDING_TOP,
-                                          spacing: SIDESHOW_SECTION_SPACING});
-
-        this._appsText = new Clutter.Text({ color: SIDESHOW_TEXT_COLOR,
+        this._appsText = new Clutter.Text({ color: DASH_TEXT_COLOR,
                                             font_name: "Sans Bold 14px",
                                             text: "Applications",
                                             height: LABEL_HEIGHT});
-        this._appsSection.append(this._appsText, Big.BoxPackFlags.EXPAND);
+        this._appsSection = new Big.Box({ padding_top: DASH_SECTION_PADDING,
+                                          spacing: DASH_SECTION_SPACING});
+        this._appsSection.append(this._appsText, Big.BoxPackFlags.NONE);
 
-        this._itemDisplayHeight = global.screen_height - this._appsSection.y - SIDESHOW_SECTION_MISC_HEIGHT * 2 - bottomHeight;
+        this._itemDisplayHeight = global.screen_height - this._appsSection.y - DASH_SECTION_MISC_HEIGHT * 2 - bottomHeight;
         
         this._appsContent = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL });
         this._appsSection.append(this._appsContent, Big.BoxPackFlags.EXPAND);
-        this._appDisplay = new AppDisplay.AppDisplay(this._displayWidth, this._itemDisplayHeight / 2, SIDESHOW_COLUMNS, SIDESHOW_PAD);
-        let sideArea = this._appDisplay.getSideArea();
-        sideArea.hide();
-        this._appsContent.append(sideArea, Big.BoxPackFlags.NONE);
-        this._appsContent.append(this._appDisplay.actor, Big.BoxPackFlags.EXPAND);
+        this._appWell = new AppDisplay.AppWell(this._displayWidth);
+        this._appsContent.append(this._appWell.actor, Big.BoxPackFlags.EXPAND);
 
         let moreAppsBox = new Big.Box({x_align: Big.BoxAlignment.END});
-        this._moreAppsLink = new Link.Link({ color: SIDESHOW_TEXT_COLOR,
+        this._moreAppsLink = new Link.Link({ color: DASH_TEXT_COLOR,
                                              font_name: "Sans Bold 14px",
                                              text: "More...",
                                              height: LABEL_HEIGHT });
         moreAppsBox.append(this._moreAppsLink.actor, Big.BoxPackFlags.EXPAND);
-        this._appsSection.append(moreAppsBox, Big.BoxPackFlags.EXPAND);
+        this._appsSection.append(moreAppsBox, Big.BoxPackFlags.NONE);
 
-        this.actor.add_actor(this._appsSection);
-  
+        this.dashContainer.append(this._appsSection, Big.BoxPackFlags.NONE);
+
         this._appsSectionDefaultHeight = this._appsSection.height;
-    
-        this._appsDisplayControlBox = new Big.Box({x_align: Big.BoxAlignment.CENTER});
-        this._appsDisplayControlBox.append(this._appDisplay.displayControl, Big.BoxPackFlags.NONE);
 
-        this._docsSection = new Big.Box({ x: SIDESHOW_PAD,
-                                          y: this._appsSection.y + this._appsSection.height,
-                                          padding_top: SIDESHOW_SECTION_PADDING_TOP,
-                                          spacing: SIDESHOW_SECTION_SPACING});
+        this._docsSection = new Big.Box({ padding_top: DASH_SECTION_PADDING,
+                                          padding_bottom: DASH_SECTION_PADDING,
+                                          spacing: DASH_SECTION_SPACING});
 
-        this._docsText = new Clutter.Text({ color: SIDESHOW_TEXT_COLOR,
+        this._docsText = new Clutter.Text({ color: DASH_TEXT_COLOR,
                                             font_name: "Sans Bold 14px",
                                             text: "Recent Documents",
                                             height: LABEL_HEIGHT});
-        this._docsSection.append(this._docsText, Big.BoxPackFlags.EXPAND);
+        this._docsSection.append(this._docsText, Big.BoxPackFlags.NONE);
 
-        this._docDisplay = new DocDisplay.DocDisplay(this._displayWidth, this._itemDisplayHeight - this._appsContent.height, SIDESHOW_COLUMNS, SIDESHOW_PAD);
+        this._docDisplay = new DocDisplay.DocDisplay(this._displayWidth);
         this._docsSection.append(this._docDisplay.actor, Big.BoxPackFlags.EXPAND);
 
         let moreDocsBox = new Big.Box({x_align: Big.BoxAlignment.END});
-        this._moreDocsLink = new Link.Link({ color: SIDESHOW_TEXT_COLOR,
+        this._moreDocsLink = new Link.Link({ color: DASH_TEXT_COLOR,
                                              font_name: "Sans Bold 14px",
                                              text: "More...",
                                              height: LABEL_HEIGHT });
         moreDocsBox.append(this._moreDocsLink.actor, Big.BoxPackFlags.EXPAND);
-        this._docsSection.append(moreDocsBox, Big.BoxPackFlags.EXPAND);
+        this._docsSection.append(moreDocsBox, Big.BoxPackFlags.NONE);
 
-        this.actor.add_actor(this._docsSection);
+        this.dashContainer.append(this._docsSection, Big.BoxPackFlags.EXPAND);
 
         this._docsSectionDefaultHeight = this._docsSection.height;
 
-        this._docsDisplayControlBox = new Big.Box({x_align: Big.BoxAlignment.CENTER});
-        this._docsDisplayControlBox.append(this._docDisplay.displayControl, Big.BoxPackFlags.NONE);
+        // The "More" or search results area
+        this._resultsAppsSection = new ItemResults(this._displayWidth, resultsHeight, AppDisplay.AppDisplay, "Applications");
+        this._resultsDocsSection = new ItemResults(this._displayWidth, resultsHeight, DocDisplay.DocDisplay, "Documents");
 
-        this._details = new Big.Box({ x: this._width + this._additionalWidth + SIDESHOW_SECTION_SPACING,
-                                      y: Panel.PANEL_HEIGHT + SIDESHOW_PAD,
-                                      width: previewWidth,
-                                      height: previewHeight,
-                                      corner_radius: DETAILS_CORNER_RADIUS,
-                                      border: DETAILS_BORDER_WIDTH,
-                                      border_color: DETAILS_BORDER_COLOR,
-                                      padding: DETAILS_PADDING});
-        this._appDisplay.setAvailableDimensionsForItemDetails(previewWidth - DETAILS_PADDING * 2 - DETAILS_BORDER_WIDTH * 2,
-                                                              previewHeight - DETAILS_PADDING * 2 - DETAILS_BORDER_WIDTH * 2);
-        this._docDisplay.setAvailableDimensionsForItemDetails(previewWidth - DETAILS_PADDING * 2 - DETAILS_BORDER_WIDTH * 2,
-                                                              previewHeight - DETAILS_PADDING * 2 - DETAILS_BORDER_WIDTH * 2);
- 
+        this._resultsPane = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                          x: this._width,
+                                          y: Panel.PANEL_HEIGHT + DASH_SECTION_PADDING,
+                                          width: this._resultsWidth + SHADOW_WIDTH,
+                                          height: resultsHeight,
+                                          reactive: true });
+
+        let resultsBackground = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                              width: this._resultsWidth,
+                                              height: resultsHeight,
+                                              corner_radius: DASH_CORNER_RADIUS,
+                                              border: DASH_BORDER_WIDTH,
+                                              border_color: DASH_BORDER_COLOR });
+
+        this._resultsPane.append(resultsBackground, Big.BoxPackFlags.EXPAND);
+
+        let resultsLeft = global.create_horizontal_gradient(PANE_LEFT_COLOR,
+                                                            PANE_MIDDLE_COLOR);
+        let resultsRight = global.create_horizontal_gradient(PANE_MIDDLE_COLOR,
+                                                             PANE_RIGHT_COLOR);
+        let resultsShadow = global.create_horizontal_gradient(SHADOW_COLOR,
+                                                              TRANSPARENT_COLOR);
+        resultsShadow.set_width(SHADOW_WIDTH);
+        
+        resultsBackground.append(resultsLeft, Big.BoxPackFlags.EXPAND);
+        resultsBackground.append(resultsRight, Big.BoxPackFlags.EXPAND);
+        this._resultsPane.append(resultsShadow, Big.BoxPackFlags.NONE);
+
+        this.actor.add_actor(this._resultsPane);
+        this._resultsPane.hide();
+
+        this._detailsPane = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                          x: this._width,
+                                          y: Panel.PANEL_HEIGHT + DASH_SECTION_PADDING,
+                                          width: this._detailsWidth + SHADOW_WIDTH,
+                                          height: detailsHeight,
+                                          reactive: true });
+        this._firstSelectAfterOverlayShow = true;
+
+        let detailsBackground = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                              width: this._detailsWidth,
+                                              height: detailsHeight,
+                                              corner_radius: DASH_CORNER_RADIUS,
+                                              border: DASH_BORDER_WIDTH,
+                                              border_color: DASH_BORDER_COLOR });
+
+        this._detailsPane.append(detailsBackground, Big.BoxPackFlags.EXPAND);
+
+        let detailsLeft = global.create_horizontal_gradient(PANE_LEFT_COLOR,
+                                                            PANE_MIDDLE_COLOR);
+        let detailsRight = global.create_horizontal_gradient(PANE_MIDDLE_COLOR,
+                                                             PANE_RIGHT_COLOR);
+        let detailsShadow = global.create_horizontal_gradient(SHADOW_COLOR,
+                                                              TRANSPARENT_COLOR);
+        detailsShadow.set_width(SHADOW_WIDTH);
+        
+        detailsBackground.append(detailsLeft, Big.BoxPackFlags.EXPAND);
+        detailsBackground.append(detailsRight, Big.BoxPackFlags.EXPAND);
+        this._detailsPane.append(detailsShadow, Big.BoxPackFlags.NONE);
+
+        this._detailsContent = new Big.Box({ padding: DASH_SECTION_PADDING + DASH_BORDER_WIDTH });
+        this._detailsPane.add_actor(this._detailsContent);
+
+        this.actor.add_actor(this._detailsPane);
+        this._detailsPane.hide();
+
+        let itemDetailsAvailableWidth = this._detailsWidth - DASH_SECTION_PADDING * 2 - DASH_BORDER_WIDTH * 2;
+        let itemDetailsAvailableHeight = detailsHeight - DASH_SECTION_PADDING * 2 - DASH_BORDER_WIDTH * 2;
+
+        this._docDisplay.setAvailableDimensionsForItemDetails(itemDetailsAvailableWidth, itemDetailsAvailableHeight);
+        this._resultsAppsSection.display.setAvailableDimensionsForItemDetails(itemDetailsAvailableWidth, itemDetailsAvailableHeight);
+        this._resultsDocsSection.display.setAvailableDimensionsForItemDetails(itemDetailsAvailableWidth, itemDetailsAvailableHeight);
+
         /* Proxy the activated signals */
-        this._appDisplay.connect('activated', function(appDisplay) {
+        this._appWell.connect('activated', function(well) {
             me.emit('activated');
         });
         this._docDisplay.connect('activated', function(docDisplay) {
             me.emit('activated');
         });
-        this._appDisplay.connect('selected', function(appDisplay) {
-            // We allow clicking on any item to select it, so if an 
-            // item in the app display is selected, we need to make sure that
-            // no item in the doc display has the selection.
-            me._docDisplay.unsetSelected();
-            me._docDisplay.hidePreview();
+        this._resultsAppsSection.display.connect('activated', function(resultsAppsDisplay) {
+            me.emit('activated');
+        });
+        this._resultsDocsSection.display.connect('activated', function(resultsDocsDisplay) {
+            me.emit('activated');
         });
         this._docDisplay.connect('selected', function(docDisplay) {
-            // We allow clicking on any item to select it, so if an 
-            // item in the doc display is selected, we need to make sure that
-            // no item in the app display has the selection.
-            me._appDisplay.unsetSelected(); 
-            me._appDisplay.hidePreview(); 
+            me._resultsDocsSection.display.unsetSelected();
+            me._resultsAppsSection.display.unsetSelected();
+            if (!me._detailsShowing()) { 
+                me._detailsPane.show();
+                me.emit('panes-displayed');
+            }
+            me._detailsContent.remove_all();
+            me._detailsContent.append(me._docDisplay.selectedItemDetails, Big.BoxPackFlags.NONE); 
         });
-        this._appDisplay.connect('redisplayed', function(appDisplay) {
-            me._ensureItemSelected();
+        this._resultsDocsSection.display.connect('selected', function(resultsDocDisplay) {
+            me._docDisplay.unsetSelected();
+            me._resultsAppsSection.display.unsetSelected();
+            if (!me._detailsShowing()) { 
+                me._detailsPane.show();
+                me.emit('panes-displayed');
+            }
+            me._detailsContent.remove_all();
+            me._detailsContent.append(me._resultsDocsSection.display.selectedItemDetails, Big.BoxPackFlags.NONE);
         });
-        this._docDisplay.connect('redisplayed', function(docDisplay) {
-            me._ensureItemSelected();
+        this._resultsAppsSection.display.connect('selected', function(resultsAppDisplay) {
+            me._docDisplay.unsetSelected();
+            me._resultsDocsSection.display.unsetSelected();
+            if (!me._detailsShowing()) { 
+                me._detailsPane.show();
+                me.emit('panes-displayed');
+            }
+            me._detailsContent.remove_all();
+            me._detailsContent.append(me._resultsAppsSection.display.selectedItemDetails, Big.BoxPackFlags.NONE);
         });
 
         this._moreAppsLink.connect('clicked',
@@ -387,314 +534,158 @@ Sideshow.prototype = {
     show: function() {
         let global = Shell.Global.get();
 
-        this._appDisplay.show();
         this._appsContent.show();
         this._docDisplay.show();
-        this._appDisplay.selectFirstItem();   
-        if (!this._appDisplay.hasSelected())
-            this._docDisplay.selectFirstItem();
-        else
-            this._docDisplay.unsetSelected();
         global.stage.set_key_focus(this._searchEntry.entry);
     },
 
     hide: function() {
+        this._firstSelectAfterOverlayShow = true;
         this._appsContent.hide();
-        this._docDisplay.hide();
+        this._docDisplay.hide(); 
         this._searchEntry.entry.text = '';
-        this._unsetMoreAppsMode();
-        this._unsetMoreDocsMode();
+        this.unsetMoreMode();
     },
 
-    // Ensures that one of the displays has the selection if neither owns it after the
-    // latest redisplay. This can be applicable if the display that earlier had the
-    // selection no longer has any items, or if their is a single section being shown 
-    // in the expanded view and it went from having no matching items to having some.
-    // We first try to place the selection in the applications section, because it is
-    // displayed above the documents section.
-    _ensureItemSelected: function() { 
-        if (!this._appDisplay.hasSelected() && !this._docDisplay.hasSelected()) {
-            if (this._appDisplay.hasItems()) { 
-                this._appDisplay.selectFirstItem();
-            } else if (this._docDisplay.hasItems()) {
-                this._docDisplay.selectFirstItem();
-            }
+    unsetMoreMode: function() {
+        this._unsetMoreAppsMode();
+        this._unsetMoreDocsMode();
+        if (this._detailsShowing()) { 
+             this._detailsPane.hide();
+             this.emit('panes-removed');
         }
+        this._unsetSearchMode();
     },
- 
-    // Sets the 'More' mode for browsing applications. Updates the applications section to have more items.
-    // Slides down the documents section to reveal the additional applications.
+
+    // Sets the 'More' mode for browsing applications.
     _setMoreAppsMode: function() {
         if (this._moreAppsMode)
             return;
-        
-        // No corresponding STATE_PENDING_ACTIVE, because we call updateAppsSection
-        // immediately below.
-        this._moreAppsMode = STATE_ACTIVE;
 
-        this._docsSection.set_clip(0, 0, this._docsSection.width, this._docsSection.height);
+        this._unsetMoreDocsMode();
+        this._unsetSearchMode();
+        this._moreAppsMode = true;
 
-        this._moreAppsLink.actor.hide();
-        this._appsSection.set_clip(0, 0, this._appsSection.width, this._appsSection.height);
+        this._resultsAppsSection.display.show();
+        this._resultsPane.add_actor(this._resultsAppsSection.actor);
+        this._resultsPane.show();
 
-        // Move the selection to the applications section if it was in the docs section.
-        this._docDisplay.unsetSelected();
-        // Because we have menus in applications, we want to reset the selection for applications
-        // as well.  The default is no menu.
-        this._appDisplay.unsetSelected();
-        this._updateAppsSection();
+        this._moreAppsLink.setText("Less...");
  
-        Tweener.addTween(this._docsSection,
-                         { y: this._docsSection.y + this._docsSection.height,
-                           clipHeightBottom: 0,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });
-
-        // We need to expand the clip on the applications section so that the first additional
-        // application to be displayed does not appear abruptly. 
-        Tweener.addTween(this._appsSection,
-                         { clipHeightBottom: this._itemDisplayHeight + SIDESHOW_SECTION_MISC_HEIGHT * 2 - LABEL_HEIGHT - SIDESHOW_SECTION_SPACING,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad",
-                           onComplete: this._onAppsSectionExpanded,
-                           onCompleteScope: this
-                         });
-
-        this.actor.set_clip(0, 0, this.actor.width, this.actor.height);
-        Tweener.addTween(this.actor,
-                         { clipWidthRight: this._expandedWidth,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });
-
-        this.emit('more-activated'); 
+        this._detailsPane.x = this._width + this._resultsWidth;
+        this.emit('panes-displayed');
     },
 
-    // Unsets the 'More' mode for browsing applications. Slides in the documents section. 
+    // Unsets the 'More' mode for browsing applications.
     _unsetMoreAppsMode: function() {
         if (!this._moreAppsMode)
             return;
 
-        this._moreAppsMode = STATE_PENDING_INACTIVE;
+        this._moreAppsMode = false;
 
-        this._moreAppsLink.actor.hide();
+        this._resultsPane.remove_actor(this._resultsAppsSection.actor);
+        this._resultsAppsSection.display.hide();
+        this._resultsPane.hide(); 
+       
+        this._moreAppsLink.setText("More...");
 
-        this._appsSection.set_clip(0, 0, this._appsSection.width, this._appsSection.height);
-        this.actor.set_clip(0, 0, this.actor.width, this.actor.height);
-        this._docDisplay.show();
+        this._detailsPane.x = this._width;
 
-        // We need to be reducing the clip on the applications section so that the last application to
-        // be removed does not disappear abruptly.
-        Tweener.addTween(this._appsSection,
-                         { clipHeightBottom: this._appsSectionDefaultHeight - LABEL_HEIGHT - SIDESHOW_SECTION_SPACING,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad",
-                           onComplete: this._onAppsSectionReduced,
-                           onCompleteScope: this
-                         }); 
-
-        Tweener.addTween(this._docsSection,
-                         { y: this._docsSection.y - this._docsSection.height,
-                           clipHeightBottom: this._docsSection.height,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });  
-        Tweener.addTween(this.actor,
-                         { clipWidthRight: this._width,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });
-        this.emit('less-activated');
-    },
-
-    // Removes the clip from the applications section to reveal the 'Less...' text.
-    // Hides the documents section so that it doesn't get updated on new searches.
-    _onAppsSectionExpanded: function() {
-        this._appsSection.remove_clip(); 
-        this._docDisplay.hide();
-        this.actor.remove_clip();
-    },
-
-    // Updates the applications section to contain fewer items. Selects the first item in the 
-    // documents section if applications section has no items.
-    // Removes the clip from the applications section to reveal the 'More...' text. 
-    // Removes the clip from the documents section, so that the clip does not limit the size of 
-    // the section if it is expanded later.
-    _onAppsSectionReduced: function() {
-        this.actor.remove_clip();
-        if (this._moreAppsMode != STATE_PENDING_INACTIVE)
-            return;
-        this._moreAppsMode = STATE_INACTIVE;
-        this._updateAppsSection();
-        if (!this._appDisplay.hasItems())
-            this._docDisplay.selectFirstItem();
-        this._appsSection.remove_clip();
-        this._docsSection.remove_clip(); 
-    },
-
-    // Updates the applications section display and the 'More...' or 'Less...' control associated with it
-    // depending on the current mode. This function must only be called once after the 'More' mode has been
-    // changed, which is ensured by _setMoreAppsMode() and _unsetMoreAppsMode() functions. 
-    _updateAppsSection: function() {
-        if (this._moreAppsMode) {
-            // Subtract one from columns since we are displaying menus
-            this._appDisplay.setExpanded(true, this._displayWidth, this._additionalWidth,
-                                         this._itemDisplayHeight + SIDESHOW_SECTION_MISC_HEIGHT,
-                                         this._expandedSideshowColumns - 1);
-            this._moreAppsLink.setText("Less...");
-            this._appsSection.insert_after(this._appsDisplayControlBox, this._appsContent, Big.BoxPackFlags.NONE);
-            this.actor.add_actor(this._details);
-            this._details.append(this._appDisplay.selectedItemDetails, Big.BoxPackFlags.NONE);
-        } else {
-            this._appDisplay.setExpanded(false, this._displayWidth, 0,
-                                         this._appsSectionDefaultHeight - SIDESHOW_SECTION_MISC_HEIGHT,
-                                         SIDESHOW_COLUMNS);
-            this._moreAppsLink.setText("More...");
-            this._appsSection.remove_actor(this._appsDisplayControlBox);
-            this.actor.remove_actor(this._details);
-            this._details.remove_all();
+        if (!this._detailsShowing()) {
+            this.emit('panes-removed');
         }
-        this._moreAppsLink.actor.show();
-    },
-
-    // Sets the 'More' mode for browsing documents. Updates the documents section to have more items.
-    // Slides up the applications section and the documents section at the same time to reveal the additional
-    // documents.
+    },   
+ 
+    // Sets the 'More' mode for browsing documents.
     _setMoreDocsMode: function() {
         if (this._moreDocsMode)
             return;
 
+        this._unsetMoreAppsMode();
+        this._unsetSearchMode();
         this._moreDocsMode = true;
 
-        if (!this._appsSection.has_clip)
-            this._appsSection.set_clip(0, 0, this._appsSection.width, this._appsSection.height);
-
-        this._moreDocsLink.actor.hide();
-        this._docsSection.set_clip(0, 0, this._docsSection.width, this._docsSection.height);
-
-        this.actor.set_clip(0, 0, this.actor.width, this.actor.height);
-
-        // Move the selection to the docs section if it was in the apps section.
-        this._appDisplay.unsetSelected();
-        if (!this._docDisplay.hasSelected())
-            this._docDisplay.selectFirstItem();
-
+        this._resultsDocsSection.display.show();
+        this._resultsPane.add_actor(this._resultsDocsSection.actor);
+        this._resultsPane.show();
+         
+        this._moreDocsLink.setText("Less...");
         
-        this._updateDocsSection();
-        
-        Tweener.addTween(this._appsSection,
-                         { y: this._appsSection.y - this._appsSection.height,
-                           clipHeightTop: 0,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });
-        // We do not slide in the 'Less...' text along with the documents so that the documents appear from the same
-        // edge where the last document was displayed, and not have that edge gradually move over to where the 'Less'
-        // text is displayed.
-        Tweener.addTween(this._docsSection,
-                         { y: this._searchEntry.actor.y + this._searchEntry.actor.height,
-                           clipHeightBottom: this._itemDisplayHeight + SIDESHOW_SECTION_MISC_HEIGHT * 2 - LABEL_HEIGHT - SIDESHOW_SECTION_SPACING,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad",
-                           onComplete: this._onDocsSectionExpanded,
-                           onCompleteScope: this
-                         });
-
-        Tweener.addTween(this.actor,
-                         { clipWidthRight: this._expandedWidth,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });
-
-        this.emit('more-activated'); 
+        this._detailsPane.x = this._width + this._resultsWidth; 
+        this.emit('panes-displayed');
     },
 
-    // Unsets the 'More' mode for browsing documents. Slides in the applications section
-    // and slides down the documents section. 
+    // Unsets the 'More' mode for browsing documents. 
     _unsetMoreDocsMode: function() {
         if (!this._moreDocsMode)
             return;
 
         this._moreDocsMode = false;
 
-        this._moreDocsLink.actor.hide();
-         
-        this._docsSection.set_clip(0, 0, this._docsSection.width, this._docsSection.height);
-        this.actor.set_clip(0, 0, this.actor.width, this.actor.height);
-        this._appsContent.show();
+        this._resultsPane.hide();
+        this._resultsPane.remove_actor(this._resultsDocsSection.actor);
+        this._resultsDocsSection.display.hide();
+ 
+        this._moreDocsLink.setText("More...");
 
-        Tweener.addTween(this._docsSection,
-                         { y: this._docsSection.y + this._appsSectionDefaultHeight,
-                           clipHeightBottom: this._docsSectionDefaultHeight - LABEL_HEIGHT - SIDESHOW_SECTION_SPACING,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad",
-                           onComplete: this._onDocsSectionReduced,
-                           onCompleteScope: this
-                         });   
-        Tweener.addTween(this._appsSection,
-                         { y: this._appsSection.y + this._appsSection.height,
-                           clipHeightTop: this._appsSection.height,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });  
-        Tweener.addTween(this.actor,
-                         { clipWidthRight: this._width,
-                           time: ANIMATION_TIME,
-                           transition: "easeOutQuad"
-                         });
+        this._detailsPane.x = this._width;
 
-        this.emit('less-activated');
-    },
-
-    // Removes the clip from the documents section to reveal the 'Less...' text.
-    // Hides the applications section so that it doesn't get updated on new searches.
-    _onDocsSectionExpanded: function() {
-        this._docsSection.remove_clip(); 
-        this._appsContent.hide();
-        this.actor.remove_clip();
-    },
-
-    // Updates the documents section to contain fewer items. Selects the first item in the 
-    // applications section if applications section has no items.
-    // Removes the clip from the documents section to reveal the 'More...' text. 
-    // Removes the clip from the applications section, so that the clip does not limit the size of 
-    // the section if it is expanded later.
-    _onDocsSectionReduced: function() {
-        this.actor.remove_clip();
-        this._updateDocsSection();  
-        if (!this._docDisplay.hasItems())
-            this._appDisplay.selectFirstItem();
-        this._docsSection.remove_clip(); 
-        this._appsSection.remove_clip(); 
-    },
-
-    // Updates the documents section display and the 'More...' or 'Less...' control associated with it
-    // depending on the current mode. This function must only be called once after the 'More' mode has been
-    // changed, which is ensured by _setMoreDocsMode() and _unsetMoreDocsMode() functions. 
-    _updateDocsSection: function() {
-        if (this._moreDocsMode) {
-            this._docDisplay.setExpanded(true, this._displayWidth, this._additionalWidth,
-                                         this._itemDisplayHeight + SIDESHOW_SECTION_MISC_HEIGHT,
-                                         this._expandedSideshowColumns);
-            this._moreDocsLink.setText("Less...");
-            this._docsSection.insert_after(this._docsDisplayControlBox, this._docDisplay.actor, Big.BoxPackFlags.NONE); 
-            this.actor.add_actor(this._details);
-            this._details.append(this._docDisplay.selectedItemDetails, Big.BoxPackFlags.NONE);
-        } else {
-            this._docDisplay.setExpanded(false, this._displayWidth, 0,
-                                         this._docsSectionDefaultHeight - SIDESHOW_SECTION_MISC_HEIGHT,
-                                         SIDESHOW_COLUMNS);
-            this._moreDocsLink.setText("More...");
-            this._docsSection.remove_actor(this._docsDisplayControlBox); 
-            this.actor.remove_actor(this._details); 
-            this._details.remove_all();
+        if (!this._detailsShowing()) {
+            this.emit('panes-removed');
         }
-        this._moreDocsLink.actor.show();
-    }
+    },
 
+    _setSearchMode: function() {
+        if (this._resultsShowing())
+            return;
+
+        this._resultsAppsSection._setSearchMode();
+        this._resultsAppsSection.display.show();
+        this._resultsPane.add_actor(this._resultsAppsSection.actor);
+
+        this._resultsDocsSection._setSearchMode();    
+        this._resultsDocsSection.display.show();
+        this._resultsPane.add_actor(this._resultsDocsSection.actor);
+        this._resultsDocsSection.actor.set_y(this._resultsAppsSection.actor.height);
+
+        this._resultsPane.show();
+
+        this._detailsPane.x = this._width + this._resultsWidth;
+        this.emit('panes-displayed');
+    },
+
+    _unsetSearchMode: function() {
+        if (this._moreDocsMode || this._moreAppsMode || !this._resultsShowing())
+            return;
+
+        this._resultsPane.hide();
+
+        this._resultsPane.remove_actor(this._resultsAppsSection.actor);
+        this._resultsAppsSection.display.hide();
+        this._resultsAppsSection._unsetSearchMode();
+
+        this._resultsPane.remove_actor(this._resultsDocsSection.actor);
+        this._resultsDocsSection.display.hide();
+        this._resultsDocsSection._unsetSearchMode();
+        this._resultsDocsSection.actor.set_y(0);
+
+        this._detailsPane.x = this._width;
+
+        if (!this._detailsShowing()) {
+            this.emit('panes-removed');
+        }
+    },
+
+    _detailsShowing: function() {
+        return this._detailsPane.visible;
+    },
+
+    _resultsShowing: function() {
+        return this._resultsPane.visible;
+    }      
 };
-Signals.addSignalMethods(Sideshow.prototype);
+
+Signals.addSignalMethods(Dash.prototype);
 
 function Overlay() {
     this._init();
@@ -736,6 +727,16 @@ Overlay.prototype = {
         background.y = -global.screen_height * (4 * BACKGROUND_SCALE - 3) / 6;
         this._group.add_actor(background);
 
+        // Transparent background is used to catch clicks outside of the dash panes when the panes
+        // are being displayed and the workspaces area should not be reactive. Catching such a
+        // click results in the panes being closed and the workspaces area becoming reactive again. 
+        this._transparentBackground = new Clutter.Rectangle({ opacity: 0,
+                                                              width: global.screen_width,
+                                                              height: global.screen_height - Panel.PANEL_HEIGHT,
+                                                              y: Panel.PANEL_HEIGHT,
+                                                              reactive: true });
+        this._group.add_actor(this._transparentBackground);
+
         // Draw a semitransparent rectangle over the background for readability.
         let backOver = new Clutter.Rectangle({ color: ROOT_OVERLAY_COLOR,
                                                width: global.screen_width,
@@ -747,29 +748,31 @@ Overlay.prototype = {
         global.overlay_group.add_actor(this._group);
 
         // TODO - recalculate everything when desktop size changes
-        this._sideshow = new Sideshow();
-        this._group.add_actor(this._sideshow.actor); 
+        this._dash = new Dash();
+        this._group.add_actor(this._dash.actor);
         this._workspaces = null;
-        this._sideshow.connect('activated', function(sideshow) {
+        this._buttonEventHandlerId = null;
+        this._dash.connect('activated', function(dash) {
             // TODO - have some sort of animation/effect while
             // transitioning to the new app.  We definitely need
             // startup-notification integration at least.
             me.hide();
         });
-        this._sideshow.connect('more-activated', function(sideshow) {
-            if (me._workspaces != null) {
-                let asideXFactor = wideScreen ? WORKSPACES_X_FACTOR_ASIDE_MODE_WIDE_SCREEN : WORKSPACES_X_FACTOR_ASIDE_MODE_REGULAR_SCREEN;  
-        
-                let workspacesX = displayGridColumnWidth * asideXFactor + WORKSPACE_GRID_PADDING;
-                me._workspaces.addButton.hide();
-                me._workspaces.updatePosition(workspacesX, null);
+        this._dash.connect('panes-displayed', function(dash) {
+            if (me._buttonEventHandlerId == null) {
+                me._transparentBackground.raise_top();
+                me._dash.actor.raise_top();
+                me._buttonEventHandlerId = me._transparentBackground.connect('button-release-event', function(background) {
+                    me._dash.unsetMoreMode();
+                    return true;
+                }); 
             }    
         });
-        this._sideshow.connect('less-activated', function(sideshow) {
-            if (me._workspaces != null) {
-                let workspacesX = displayGridColumnWidth + WORKSPACE_GRID_PADDING;
-                me._workspaces.addButton.show();
-                me._workspaces.updatePosition(workspacesX, null);
+        this._dash.connect('panes-removed', function(dash) {
+            if (me._buttonEventHandlerId != null) {
+                me._transparentBackground.lower_bottom();  
+                me._transparentBackground.disconnect(me._buttonEventHandlerId);  
+                me._buttonEventHandlerId = null;
             }
         });
     },
@@ -778,12 +781,11 @@ Overlay.prototype = {
 
     // Unsets the expanded display mode if a GenericDisplayItem is being 
     // dragged over the overlay, i.e. as soon as it starts being dragged.
-    // This slides the workspaces back in and allows the user to place
+    // This closes the additional panes and allows the user to place
     // the item on any workspace.
     handleDragOver : function(source, actor, x, y, time) {
         if (source instanceof GenericDisplay.GenericDisplayItem) {
-            this._sideshow._unsetMoreAppsMode();
-            this._sideshow._unsetMoreDocsMode();
+            this._dash.unsetMoreMode();
             return true;
         }
   
@@ -804,7 +806,7 @@ Overlay.prototype = {
         let screenWidth = global.screen_width;
         let screenHeight = global.screen_height; 
 
-        this._sideshow.show();
+        this._dash.show();
 
         let columnsUsed = wideScreen ? COLUMNS_FOR_WORKSPACES_WIDE_SCREEN : COLUMNS_FOR_WORKSPACES_REGULAR_SCREEN;
         let rowsUsed = wideScreen ? ROWS_FOR_WORKSPACES_WIDE_SCREEN : ROWS_FOR_WORKSPACES_REGULAR_SCREEN;  
@@ -837,19 +839,19 @@ Overlay.prototype = {
 
         // Try to make the menu not too visible behind the empty space between
         // the workspace previews by sliding in its clipping rectangle.
-        // We want to finish drawing the sideshow just before the top workspace fully
+        // We want to finish drawing the Dash just before the top workspace fully
         // slides in on the top. Which means that we have more time to wait before
-        // drawing the sideshow if the active workspace is displayed on the bottom of
+        // drawing the dash if the active workspace is displayed on the bottom of
         // the workspaces grid, and almost no time to wait if it is displayed in the top
         // row of the workspaces grid. The calculations used below try to roughly
         // capture the animation ratio for when workspaces are covering the top of the overlay
         // vs. when workspaces are already below the top of the overlay, and apply it
-        // to clipping the sideshow. The clipping is removed in this._showDone().
-        this._sideshow.actor.set_clip(0, 0,
+        // to clipping the dash. The clipping is removed in this._showDone().
+        this._dash.actor.set_clip(0, 0,
                                       this._workspaces.getFullSizeX(),
-                                      this._sideshow.actor.height);
-        Tweener.addTween(this._sideshow.actor,
-                         { clipWidthRight: this._sideshow._width + WORKSPACE_GRID_PADDING + this._workspaces.getWidthToTopActiveWorkspace(),
+                                      this._dash.actor.height);
+        Tweener.addTween(this._dash.actor,
+                         { clipWidthRight: this._dash._width + WORKSPACE_GRID_PADDING + this._workspaces.getWidthToTopActiveWorkspace(),
                            time: ANIMATION_TIME,
                            transition: "easeOutQuad",
                            onComplete: this._showDone,
@@ -867,22 +869,22 @@ Overlay.prototype = {
         let global = Shell.Global.get();
 
         this._hideInProgress = true;
-        // lower the sideshow, so that workspaces display is on top and covers the sideshow while it is sliding out
-        this._sideshow.actor.lower(this._workspaces.actor);
+        // lower the Dash, so that workspaces display is on top and covers the Dash while it is sliding out
+        this._dash.actor.lower(this._workspaces.actor);
         this._workspaces.hide();
 
         // Try to make the menu not too visible behind the empty space between
         // the workspace previews by sliding in its clipping rectangle.
         // The logic used is the same as described in this.show(). If the active workspace
         // is displayed in the top row, than almost full animation time is needed for it
-        // to reach the top of the overlay and cover the sideshow fully, while if the
+        // to reach the top of the overlay and cover the Dash fully, while if the
         // active workspace is in the lower row, than the top left workspace reaches the
         // top of the overlay sooner as it is moving out of the way.
         // The clipping is removed in this._hideDone().
-        this._sideshow.actor.set_clip(0, 0,
-                                      this._sideshow.actor.width + WORKSPACE_GRID_PADDING + this._workspaces.getWidthToTopActiveWorkspace(),
-                                      this._sideshow.actor.height);
-        Tweener.addTween(this._sideshow.actor,
+        this._dash.actor.set_clip(0, 0,
+                                      this._dash.actor.width + WORKSPACE_GRID_PADDING + this._workspaces.getWidthToTopActiveWorkspace(),
+                                      this._dash.actor.height);
+        Tweener.addTween(this._dash.actor,
                          { clipWidthRight: this._workspaces.getFullSizeX() + this._workspaces.getWidthToTopActiveWorkspace() - global.screen_width,
                            time: ANIMATION_TIME,
                            transition: "easeOutQuad",
@@ -902,20 +904,20 @@ Overlay.prototype = {
 
     //// Private methods ////
 
-    // Raises the sideshow to the top, so that we can tell if the pointer is above one of its items.
+    // Raises the Dash to the top, so that we can tell if the pointer is above one of its items.
     // We need to do this once the workspaces are shown because the workspaces actor currently covers
     // the whole screen, regardless of where the workspaces are actually displayed.
     //
     // Once we rework the workspaces actor to only cover the area it actually needs, we can
     // remove this workaround. Also http://bugzilla.openedhand.com/show_bug.cgi?id=1513 requests being
     // able to pick only a reactive actor at a certain position, rather than any actor. Being able
-    // to do that would allow us to not have to raise the sideshow.  
+    // to do that would allow us to not have to raise the Dash.
     _showDone: function() {
         if (this._hideInProgress)
             return;
 
-        this._sideshow.actor.raise_top();
-        this._sideshow.actor.remove_clip();
+        this._dash.actor.raise_top();
+        this._dash.actor.remove_clip();
 
         this.emit('shown');
     },
@@ -928,8 +930,8 @@ Overlay.prototype = {
         this._workspaces.destroy();
         this._workspaces = null;
 
-        this._sideshow.actor.remove_clip();
-        this._sideshow.hide();
+        this._dash.actor.remove_clip();
+        this._dash.hide();
         this._group.hide();
 
         this.visible = false; 

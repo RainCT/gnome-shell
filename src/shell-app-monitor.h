@@ -5,6 +5,8 @@
 #include <glib-object.h>
 #include <glib.h>
 
+#include "window.h"
+
 /* 
  * This object provides monitoring of system application directories (.desktop files)
  * and activity-based statistics about applications usage 
@@ -35,14 +37,17 @@ GType shell_app_monitor_get_type (void) G_GNUC_CONST;
 
 ShellAppMonitor* shell_app_monitor_get_default(void);
 
+char *shell_app_monitor_get_window_id (ShellAppMonitor *monitor, MetaWindow *metawin);
+
 /* Get the most popular applications for a given activity */
 GSList *shell_app_monitor_get_most_used_apps (ShellAppMonitor *monitor,
                                               int              activity,
                                               gint             number);
 
+guint shell_app_monitor_get_window_count (ShellAppMonitor *monitor, const char *appid);
+
 /* Get whatever's running right now */
-GSList *shell_app_monitor_get_running_apps (ShellAppMonitor *monitor,
-                                            int              activity);
+GList *shell_app_monitor_get_running_app_ids (ShellAppMonitor *monitor);
 
 G_END_DECLS
 

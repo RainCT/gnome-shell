@@ -28,8 +28,7 @@ DocDisplayItem.prototype = {
         GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth);     
         this._docInfo = docInfo;
     
-        this._setItemInfo(docInfo.name, "",
-                          docInfo.getIcon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE));
+        this._setItemInfo(docInfo.name, "");
     },
 
     //// Public methods ////
@@ -43,10 +42,15 @@ DocDisplayItem.prototype = {
 
     //// Protected method overrides ////
 
+    // Returns an icon for the item.
+    _createIcon : function() {
+        return this._docInfo.createIcon(GenericDisplay.ITEM_DISPLAY_ICON_SIZE);
+    },
+
     // Ensures the preview icon is created.
     _ensurePreviewIconCreated : function() {
         if (!this._previewIcon)
-            this._previewIcon = this._docInfo.getIcon(GenericDisplay.PREVIEW_ICON_SIZE);
+            this._previewIcon = this._docInfo.createIcon(GenericDisplay.PREVIEW_ICON_SIZE);
     },
 
     // Creates and returns a large preview icon, but only if this._docInfo is an image file
@@ -63,11 +67,10 @@ DocDisplayItem.prototype = {
  * The documents are sorted by how recently they were last visited.
  *
  * width - width available for the display
- * height - height available for the display
  */
-function DocDisplay(width, height, numberOfColumns, columnGap) {
-    this._init(width, height, numberOfColumns, columnGap);
-} 
+function DocDisplay(width) {
+    this._init(width);
+}
 
 DocDisplay.prototype = {
     __proto__:  GenericDisplay.GenericDisplay.prototype,
@@ -151,8 +154,8 @@ DocDisplay.prototype = {
     },
 
     // Creates a DocDisplayItem based on itemInfo, which is expected to be a DocInfo object.
-    _createDisplayItem: function(itemInfo) {
-        return new DocDisplayItem(itemInfo, this._columnWidth);
+    _createDisplayItem: function(itemInfo, width) {
+        return new DocDisplayItem(itemInfo, width);
     }
 };
 

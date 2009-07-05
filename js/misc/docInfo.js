@@ -41,7 +41,7 @@ DocInfo.prototype = {
         }
     },
 
-    getIcon : function(size) {
+    createIcon : function(size) {
         let icon = new Clutter.Texture();
         let iconPixbuf;
 
