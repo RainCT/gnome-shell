@@ -58,9 +58,13 @@ libgnome_shell_la_SOURCES =			\
 	shell-app-system.h			\
 	shell-arrow.c			\
 	shell-arrow.h			\
+	shell-drawing-area.c			\
+	shell-drawing-area.h			\
 	shell-embedded-window.c			\
 	shell-embedded-window.h			\
 	shell-embedded-window-private.h		\
+	shell-gconf.c				\
+	shell-gconf.h				\
 	shell-gtk-embed.c			\
 	shell-gtk-embed.h			\
 	shell-overflow-list.c		\
@@ -71,6 +75,8 @@ libgnome_shell_la_SOURCES =			\
 	shell-global.h				\
 	shell-status-menu.c				\
 	shell-status-menu.h				\
+	shell-stack.c				\
+	shell-stack.h				\
 	shell-tray-manager.c			\
 	shell-tray-manager.h			\
 	shell-texture-cache.c			\

@@ -216,6 +216,7 @@ AppDisplay.prototype = {
         this.connect('expanded', Lang.bind(this, function (self) {
             this._filterReset();
         }));
+        this._filterReset();
     },
 
     moveRight: function() {
@@ -235,7 +236,7 @@ AppDisplay.prototype = {
     },
 
     // Override genericDisplay.js
-    getSideArea: function() {
+    getNavigationArea: function() {
         return this._menuDisplay;
     },
 
@@ -261,11 +262,7 @@ AppDisplay.prototype = {
 
     _filterReset: function() {
         GenericDisplay.GenericDisplay.prototype._filterReset.call(this);
-        if (this._activeMenu != null)
-            this._activeMenu.setState(MENU_UNSELECTED);
-        this._activeMenuIndex = -1;
-        this._activeMenu = null;
-        this._focusInMenu = true;
+        this._selectMenuIndex(0);
     },
 
     //// Private ////
@@ -280,28 +277,36 @@ AppDisplay.prototype = {
         this._menuDisplays[index].setState(MENU_SELECTED);
     },
 
+    _addMenuItem: function(name, id, icon, index) {
+        let display = new MenuItem(name, id, icon);
+        this._menuDisplays.push(display);
+        display.connect('state-changed', Lang.bind(this, function (display) {
+            let activated = display.getState() != MENU_UNSELECTED;
+            if (!activated && display == this._activeMenu) {
+                this._activeMenuIndex = -1;
+                this._activeMenu = null;
+            } else if (activated) {
+                if (display != this._activeMenu && this._activeMenu != null)
+                    this._activeMenu.setState(MENU_UNSELECTED);
+                this._activeMenuIndex = index;
+                this._activeMenu = display;
+                if (id == null) {
+                    this._activeMenuApps = this._appMonitor.get_most_used_apps(0, 30);
+                } else {
+                    this._activeMenuApps = this._appSystem.get_applications_for_menu(id);
+                }
+            }
+            this._redisplay(true);
+        }));
+        this._menuDisplay.append(display.actor, 0);
+    },
+
     _redisplayMenus: function() {
         this._menuDisplay.remove_all();
+        this._addMenuItem('Frequent', null, 'gtk-select-all');
         for (let i = 0; i < this._menus.length; i++) {
             let menu = this._menus[i];
-            let display = new MenuItem(menu.name, menu.id, menu.icon);
-            this._menuDisplays.push(display);
-            let menuIndex = i;
-            display.connect('state-changed', Lang.bind(this, function (display) {
-                let activated = display.getState() != MENU_UNSELECTED;
-                if (!activated && display == this._activeMenu) {
-                    this._activeMenuIndex = -1;
-                    this._activeMenu = null;
-                } else if (activated) {
-                    if (display != this._activeMenu && this._activeMenu != null)
-                        this._activeMenu.setState(MENU_UNSELECTED);
-                    this._activeMenuIndex = menuIndex;
-                    this._activeMenu = display;
-                    this._activeMenuApps = this._appSystem.get_applications_for_menu(menu.id);
-                }
-                this._redisplay();
-            }));
-            this._menuDisplay.append(display.actor, 0);
+            this._addMenuItem(menu.name, menu.id, menu.icon, i+1);
         }
     },
 
@@ -467,8 +472,7 @@ WellDisplayItem.prototype = {
             }));
         this.actor._delegate = this;
         this.actor.connect('button-release-event', Lang.bind(this, function (b, e) {
-            this.launch();
-            this.emit('activated');
+            this._handleActivate();
         }));
 
         let draggable = DND.makeDraggable(this.actor);
@@ -480,7 +484,7 @@ WellDisplayItem.prototype = {
 
         this.actor.append(iconBox, Big.BoxPackFlags.NONE);
 
-        let count = Shell.AppMonitor.get_default().get_window_count(appInfo.appId);
+        this._windows = Shell.AppMonitor.get_default().get_windows_for_app(appInfo.appId)
 
         let nameBox = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
                                     x_align: Big.BoxAlignment.CENTER });
@@ -492,7 +496,7 @@ WellDisplayItem.prototype = {
                                         line_wrap_mode: Pango.WrapMode.WORD_CHAR,
                                         text: appInfo.name });
         nameBox.append(this._name, Big.BoxPackFlags.EXPAND);
-        if (count > 0) {
+        if (this._windows.length > 0) {
             let runningBox = new Big.Box({ /* border_color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                            border: 1,
                                            padding: 1 */ });
@@ -501,6 +505,16 @@ WellDisplayItem.prototype = {
         } else {
             this.actor.append(nameBox, Big.BoxPackFlags.NONE);
         }
+    },
+
+    _handleActivate: function () {
+        if (this._windows.length == 0)
+            this.launch();
+        else {
+            let first = this._windows[0];
+            first.activate(Clutter.get_current_event_time());
+        }
+        this.emit('activated');
     },
 
     // Opens an application represented by this display item.
