@@ -11,7 +11,7 @@ let bus = DBus.session;
 var zeitgeistIface = {
     name: 'org.gnome.zeitgeist',
     methods: [{ name: 'FindEvents',
-                inSignature: 'iiibbaa{sv}',
+                inSignature: 'iiibsaa{sv}',
                 outSignature: 'a(isssssssbssss)' },
              ],
     signals: [{ name: 'EventsChanged',
@@ -60,7 +60,7 @@ RecentDocsWatcher.prototype = {
     _updateItems: function(emitter) {
         if (this._numberOfItems && !this._zeitgeistError) {
             iface.FindEventsRemote(0, 0, this._numberOfItems,
-                false, true, [{ text_uri: 'file://%' }],
+                false, 'item', [{ uri: 'file://%' }],
                 Lang.bind(this, this._recentChanged));
         }
     },
