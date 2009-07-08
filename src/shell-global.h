@@ -40,8 +40,6 @@ GdkPixbuf *shell_get_thumbnail(const gchar *uri, const gchar *mime_type);
 
 GdkPixbuf *shell_get_icon_for_mime_type(const char *mime_type, gint pixel_size);
 
-GSList *shell_get_categories_for_desktop_file(const char *desktop_file_name);
-
 guint16 shell_get_event_key_symbol(ClutterEvent *event);
 
 guint16 shell_get_button_event_click_count(ClutterEvent *event);
