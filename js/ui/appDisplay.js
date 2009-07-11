@@ -14,6 +14,8 @@ const Mainloop = imports.mainloop;
 
 const DND = imports.ui.dnd;
 const GenericDisplay = imports.ui.genericDisplay;
+const DocDisplay = imports.ui.docDisplay;
+const DocInfo = imports.misc.docInfo;
 const Zeitgeist = imports.misc.zeitgeist;
 const Workspaces = imports.ui.workspaces;
 
@@ -109,10 +111,15 @@ AppDisplayItem.prototype = {
                                                     text: "Loading..." });
         this._recentDocs.append(this._recentItems, Big.BoxPackFlags.EXPAND);
 
+        this._list = new Shell.OverflowList({ width: this._availableWidth,
+                                              spacing: 6.0,
+                                              item_height: GenericDisplay.ITEM_DISPLAY_HEIGHT });
+        this._recentDocs.append(this._list, Big.BoxPackFlags.EXPAND);
+
         Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, 'item',
             [{ mimetypes: ['text/plain']}], Lang.bind(this, this._setRecentItems));
 
-        details.append(this._recentDocs, Big.BoxPackFlags.NONE);
+        details.append(this._recentDocs, Big.BoxPackFlags.EXPAND);
 
         return details;
     },
@@ -121,11 +128,13 @@ AppDisplayItem.prototype = {
         if (excp)
             this._recentItems.text = 'Couldn\'t retrieve items from Zeitgeist.';
         else {
-            for (let i in docs) {
+            let item;
+            for (i = 0; i < docs.length; i++) {
                 item = new DocInfo.DocInfo (docs[i]);
-                
+                displayItem = new DocDisplay.DocDisplayItem(item, this._availableWidth);
+                this._list.add_actor(displayItem.actor);
             }
-            this._recentItems.text = 'Success :)';
+            this._recentItems.text = '';
         }
     }
 };
