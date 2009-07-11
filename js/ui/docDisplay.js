@@ -78,7 +78,7 @@ DocDisplay.prototype = {
     _init : function(width, height, numberOfColumns, columnGap) {
         GenericDisplay.GenericDisplay.prototype._init.call(this, width, height, numberOfColumns, columnGap);
         Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
-            this._refreshCache), 500); // FIXME: Do not hardcode 500. Use iterators or sth else.
+            this._refreshCache), 10); // FIXME: Do not hardcode 500. Use iterators or sth else.
     },
 
     //// Protected method overrides ////
