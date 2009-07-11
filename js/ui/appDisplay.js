@@ -50,6 +50,7 @@ AppDisplayItem.prototype = {
         return this._appInfo.get_id();
     },
 
+
     //// Public method overrides ////
 
     // Opens an application represented by this display item.
@@ -87,6 +88,29 @@ AppDisplayItem.prototype = {
                 log('Error loading AppDisplayItem preview icon ' + e);
             }
         }
+    },
+
+    _createCustomDetailsActor: function(details) {
+        // Add related documents from Zeitgeist
+        
+        let recentDocs = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                       spacing: GenericDisplay.PREVIEW_BOX_SPACING });
+        recentDocs.append(new Clutter.Text(), Big.BoxPackFlags.NONE);
+        let recentTitle = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
+                                             font_name: "Sans bold 14px",
+                                             line_wrap: true,
+                                             text: "Related documents" });
+        recentDocs.append(recentTitle, Big.BoxPackFlags.EXPAND);
+
+        let recentItems = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
+                                                    font_name: "Sans 14px",
+                                                    line_wrap: true,
+                                                    text: "..." });
+        recentDocs.append(recentItems, Big.BoxPackFlags.EXPAND);
+
+        details.append(recentDocs, Big.BoxPackFlags.NONE);
+
+        return details;
     }
 };
 
@@ -437,7 +461,7 @@ AppDisplay.prototype = {
             if (category.indexOf(search) >= 0)
                 return true;
         }
-       
+
         return false;
     },
 
