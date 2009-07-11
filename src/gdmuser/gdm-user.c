@@ -20,6 +20,7 @@
 
 #include <config.h>
 
+#include <float.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -411,13 +412,16 @@ _gdm_user_update (GdmUser             *user,
         /* Display Name */
         if (pwent->pw_gecos && pwent->pw_gecos[0] != '\0') {
                 gchar *first_comma;
+                gchar *real_name_utf8;
 
-                first_comma = strchr (pwent->pw_gecos, ',');
+                real_name_utf8 = g_locale_to_utf8 (pwent->pw_gecos, -1, NULL, NULL, NULL);
+
+                first_comma = strchr (real_name_utf8, ',');
                 if (first_comma) {
-                        real_name = g_strndup (pwent->pw_gecos,
-                                                  (first_comma - pwent->pw_gecos));
+                        real_name = g_strndup (real_name_utf8, first_comma - real_name_utf8);
+                        g_free (real_name_utf8);
                 } else {
-                        real_name = g_strdup (pwent->pw_gecos);
+                        real_name = real_name_utf8;
                 }
 
                 if (real_name[0] == '\0') {
@@ -881,7 +885,7 @@ curved_rectangle (cairo_t *cr,
         x1 = x0 + width;
         y1 = y0 + height;
 
-        if (!width || !height) {
+        if (width < FLT_EPSILON || height < FLT_EPSILON) {
                 return;
         }
 
@@ -1156,8 +1160,8 @@ gdm_user_render_icon (GdmUser   *user,
         } else {
                 pixbuf = NULL;
         }
- out:
         g_free (path);
+ out:
 
         if (pixbuf != NULL) {
                 framed = frame_pixbuf (pixbuf);

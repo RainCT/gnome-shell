@@ -289,6 +289,7 @@ function AppsWidgetInfo(appInfo) {
 AppsWidgetInfo.prototype = {
     _init : function(appInfo) {
         this._info = appInfo;
+        this.name = appInfo.get_name();
     },
 
     createIcon : function(size) {
@@ -318,6 +319,8 @@ AppsWidget.prototype = {
         let apps = appSystem.get_favorites();
         for (let i = 0; i < apps.length; i++) {
             let app = appSystem.lookup_app(apps[i]);
+            if (!app)
+                continue;
             this.addItem(new AppsWidgetInfo(app));
         }
     }
