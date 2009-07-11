@@ -14,6 +14,7 @@ const Mainloop = imports.mainloop;
 
 const DND = imports.ui.dnd;
 const GenericDisplay = imports.ui.genericDisplay;
+const Zeitgeist = imports.misc.zeitgeist;
 const Workspaces = imports.ui.workspaces;
 
 const ENTERED_MENU_COLOR = new Clutter.Color();
@@ -93,24 +94,39 @@ AppDisplayItem.prototype = {
     _createCustomDetailsActor: function(details) {
         // Add related documents from Zeitgeist
         
-        let recentDocs = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+        this._recentDocs = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
                                        spacing: GenericDisplay.PREVIEW_BOX_SPACING });
-        recentDocs.append(new Clutter.Text(), Big.BoxPackFlags.NONE);
+        this._recentDocs.append(new Clutter.Text(), Big.BoxPackFlags.NONE);
         let recentTitle = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                              font_name: "Sans bold 14px",
                                              line_wrap: true,
                                              text: "Related documents" });
-        recentDocs.append(recentTitle, Big.BoxPackFlags.EXPAND);
+        this._recentDocs.append(recentTitle, Big.BoxPackFlags.EXPAND);
 
-        let recentItems = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
+        this._recentItems = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                                     font_name: "Sans 14px",
                                                     line_wrap: true,
-                                                    text: "..." });
-        recentDocs.append(recentItems, Big.BoxPackFlags.EXPAND);
+                                                    text: "Loading..." });
+        this._recentDocs.append(this._recentItems, Big.BoxPackFlags.EXPAND);
 
-        details.append(recentDocs, Big.BoxPackFlags.NONE);
+        Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, 'item',
+            [{ mimetypes: ['text/plain']}], Lang.bind(this, this._setRecentItems));
+
+        details.append(this._recentDocs, Big.BoxPackFlags.NONE);
 
         return details;
+    },
+    
+    _setRecentItems: function(docs, excp) {
+        if (excp)
+            this._recentItems.text = 'Couldn\'t retrieve items from Zeitgeist.';
+        else {
+            for (let i in docs) {
+                item = new DocInfo.DocInfo (docs[i]);
+                
+            }
+            this._recentItems.text = 'Success :)';
+        }
     }
 };
 
