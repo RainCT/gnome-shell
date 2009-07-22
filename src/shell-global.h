@@ -36,8 +36,6 @@ GType            shell_global_get_type            (void) G_GNUC_CONST;
 gboolean shell_clutter_texture_set_from_pixbuf (ClutterTexture *texture,
                                                 GdkPixbuf      *pixbuf);
 
-GdkPixbuf *shell_get_thumbnail(const gchar *uri, const gchar *mime_type);
-
 GdkPixbuf *shell_get_icon_for_mime_type(const char *mime_type, gint pixel_size);
 
 guint16 shell_get_event_key_symbol(ClutterEvent *event);
@@ -80,6 +78,8 @@ ClutterCairoTexture *shell_global_create_vertical_gradient (ClutterColor *top,
 
 ClutterCairoTexture *shell_global_create_horizontal_gradient (ClutterColor *left,
 							      ClutterColor *right);
+
+void shell_global_format_time_relative_pretty (ShellGlobal *global, guint delta, char **text, guint *update_time);
 
 ClutterActor *shell_global_create_root_pixmap_actor (ShellGlobal *global);
 

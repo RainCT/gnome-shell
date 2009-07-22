@@ -325,13 +325,15 @@ Dash.prototype = {
                 if (me._searchEntry.entry.text != '')
                     me._searchEntry.entry.text = '';
                 // Next, if we're in one of the "more" modes or showing the details pane, close them
-                else if (me._moreAppsMode || me._moreDocsMode || me._detailsShowing())
+                else if (me._resultsShowing())
                     me.unsetMoreMode();
                 // Finally, just close the overlay entirely
                 else
                     me.emit('activated');
                 return true;
             } else if (symbol == Clutter.Up) {
+                if (!me._resultsShowing())
+                    return true;
                 // selectUp and selectDown wrap around in their respective displays
                 // too, but there doesn't seem to be any flickering if we first select
                 // something in one display, but then unset the selection, and move
@@ -342,13 +344,17 @@ Dash.prototype = {
                   me._resultsAppsSection.display.selectUp();
                 else
                   me._resultsDocsSection.display.selectUp();
+                return true;
             } else if (symbol == Clutter.Down) {
+                if (!me._resultsShowing())
+                    return true;
                 if (me._resultsDocsSection.display.hasSelected())
                   me._resultsDocsSection.display.selectDown();
                 else if (me._resultsAppsSection.display.hasItems())
                   me._resultsAppsSection.display.selectDown();
                 else
                   me._resultsDocsSection.display.selectDown();
+                return true;
             }
             return false;
         });
@@ -594,10 +600,7 @@ Dash.prototype = {
 
         this._moreAppsLink.setText("More...");
 
-        this._repositionDetails();
-        if (!this._detailsShowing()) {
-            this.emit('panes-removed');
-        }
+        this._hideDetails();
     },   
  
     // Sets the 'More' mode for browsing documents.
@@ -633,11 +636,7 @@ Dash.prototype = {
 
         this._moreDocsLink.setText("More...");
 
-        this._repositionDetails();
-
-        if (!this._detailsShowing()) {
-            this.emit('panes-removed');
-        }
+        this._hideDetails();
     },
 
     _setSearchMode: function() {
@@ -676,11 +675,7 @@ Dash.prototype = {
         this._resultsDocsSection._unsetSearchMode();
         this._resultsDocsSection.actor.set_y(0);
 
-        this._repositionDetails();
-
-        if (!this._detailsShowing()) {
-            this.emit('panes-removed');
-        }
+        this._hideDetails();
     },
 
     _repositionDetails: function () {
@@ -698,6 +693,13 @@ Dash.prototype = {
         this._repositionDetails();
         this.emit('panes-displayed');
     },
+
+    _hideDetails: function() {
+        if (!this._detailsShowing)
+            return;
+        this._detailsPane.hide();
+        this.emit('panes-removed');
+     },
 
     _detailsShowing: function() {
         return this._detailsPane.visible;

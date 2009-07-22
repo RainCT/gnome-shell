@@ -5,6 +5,8 @@ const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
 const Shell = imports.gi.Shell;
 
+const Lang = imports.lang;
+const Signals = imports.signals;
 const Main = imports.ui.main;
 
 const THUMBNAIL_ICON_MARGIN = 2;
@@ -15,22 +17,22 @@ function DocInfo(item) {
 
 DocInfo.prototype = {
     _init : function(item) {
-        if (item.length == 13) {
+        if ("uri" in item) {
             // Item from Zeitgeist
-            this._recentlyUsed = null;
-            this.timestamp = item[0];
-            this.uri = item[1];
-            this.name = item[2];
-            //this.source = item[3];
-            //this.content = item[4];
-            this.mimeType = item[5];
-            this.tags = item[6];
-            //this.comment = item[7];
-            this.bookmark = item[8];
-            //this.usage = item[9];
-            this.icon = item[10];
-            this.app = item[11];
-            //this.origin = item[12];
+            this._recentInfo = null;
+            this.timestamp = item["timestamp"];
+            this.uri = item["uri"];
+            this.name = item["text"];
+            //this.source = item["source"];
+            //this.content = item["content"];
+            this.mimeType = item["mimetype"];
+            this.tags = item["tags"];
+            //this.comment = item["comment"];
+            this.bookmark = item["bookmark"];
+            //this.usage = item["usage"];
+            this.icon = item["icon"];
+            this.app = item["app"];
+            //this.origin = item["origin"];
         } else {
             // Item from GtkRecentlyUsed
             this._recentInfo = item;
@@ -42,6 +44,11 @@ DocInfo.prototype = {
     },
 
     createIcon : function(size) {
+        if (this._recentInfo)
+            return Shell.TextureCache.get_default().load_recent_thumbnail(size, this._recentInfo);
+        else
+            return Shell.TextureCache.get_default().load_thumbnail(size, this.uri, this.mimeType);
+/*
         let icon = new Clutter.Texture();
         let iconPixbuf;
 
@@ -77,7 +84,7 @@ DocInfo.prototype = {
             }
             Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
             return icon;
-        }
+        }*/
     },
 
     launch : function() {
@@ -147,3 +154,58 @@ DocInfo.prototype = {
         }
     }
 };
+
+var docManagerInstance = null;
+
+function getDocManager(size) {
+    if (docManagerInstance == null)
+        docManagerInstance = new DocManager(size);
+    return docManagerInstance;
+}
+
+function DocManager(size) {
+    this._init(size);
+}
+
+DocManager.prototype = {
+    _init: function(iconSize) {
+        this._iconSize = iconSize;
+        this._recentManager = Gtk.RecentManager.get_default();
+        this._items = {};
+        this._recentManager.connect('changed', Lang.bind(this, function(recentManager) {
+            this._reload();
+            this.emit('changed');
+        }));
+        this._reload();
+    },
+
+    _reload: function() {
+        let docs = this._recentManager.get_items();
+        let newItems = {};
+        for (let i = 0; i < docs.length; i++) {
+            let recentInfo = docs[i];
+            let docInfo = new DocInfo(recentInfo);
+
+            // we use GtkRecentInfo URI as an item Id
+            newItems[docInfo.uri] = docInfo;
+        }
+        let deleted = {};
+        for (var uri in this._items) {
+            if (!(uri in newItems))
+                deleted[uri] = this._items[uri];
+        }
+        /* If we'd cached any thumbnail references that no longer exist,
+           dump them here */
+        let texCache = Shell.TextureCache.get_default();
+        for (var uri in deleted) {
+            texCache.evict_recent_thumbnail(this._iconSize, this._items[uri]);
+        }
+        this._items = newItems;
+    },
+
+    getItems: function() {
+        return this._items;
+    }
+}
+
+Signals.addSignalMethods(DocManager.prototype);

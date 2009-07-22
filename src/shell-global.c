@@ -14,8 +14,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <dbus/dbus-glib.h>
-#include <libgnomeui/gnome-thumbnail.h>
 #include <gio/gio.h>
+#include <glib/gi18n.h>
 #include <math.h>
 #include <X11/extensions/Xfixes.h>
 
@@ -337,72 +337,6 @@ shell_clutter_texture_set_from_pixbuf (ClutterTexture *texture,
                                               gdk_pixbuf_get_has_alpha (pixbuf)
                                               ? 4 : 3,
                                               0, NULL);
-}
-
-static GnomeThumbnailFactory *thumbnail_factory;
-
-/**
- * shell_get_thumbnail:
- *
- * @uri: URI of the file to thumbnail
- * @mime_type: Mime-Type of the file to thumbnail
- *
- * Return value: #GdkPixbuf containing a thumbnail for file @uri 
- *               if the thumbnail exists or can be generated, %NULL otherwise
- */
-GdkPixbuf *
-shell_get_thumbnail(const gchar *uri,
-                    const gchar *mime_type)
-{
-    char *existing_thumbnail;
-    GdkPixbuf *pixbuf = NULL;
-    GError *error = NULL;
-    GFile *file = NULL;
-    GFileInfo *file_info = NULL;
-    GTimeVal mtime_g;
-    time_t mtime = 0;
-
-    file = g_file_new_for_uri (uri);
-    file_info = g_file_query_info (file, G_FILE_ATTRIBUTE_TIME_MODIFIED, G_FILE_QUERY_INFO_NONE, NULL, NULL);
-    g_object_unref (file);
-    if (file_info) {
-        g_file_info_get_modification_time (file_info, &mtime_g);
-        g_object_unref (file_info);
-        mtime = (time_t) mtime_g.tv_sec;
-    }
-
-    if (thumbnail_factory == NULL)
-      thumbnail_factory = gnome_thumbnail_factory_new (GNOME_THUMBNAIL_SIZE_NORMAL);
-
-    existing_thumbnail = gnome_thumbnail_factory_lookup (thumbnail_factory, uri, mtime);
-
-    if (existing_thumbnail != NULL)
-      {
-        pixbuf = gdk_pixbuf_new_from_file(existing_thumbnail, &error);
-        if (error != NULL) 
-          {
-            g_warning("Could not generate a pixbuf from file %s: %s", existing_thumbnail, error->message);
-            g_clear_error (&error);
-          }
-      }
-    else if (gnome_thumbnail_factory_has_valid_failed_thumbnail (thumbnail_factory, uri, mtime))
-      return NULL;
-    else if (gnome_thumbnail_factory_can_thumbnail (thumbnail_factory, uri, mime_type, mtime)) 
-      {
-        pixbuf = gnome_thumbnail_factory_generate_thumbnail (thumbnail_factory, uri, mime_type);
-        if (pixbuf)
-          {
-            // we need to save the thumbnail so that we don't need to generate it again in the future
-            gnome_thumbnail_factory_save_thumbnail (thumbnail_factory, pixbuf, uri, mtime);
-          }          
-        else 
-          {
-            g_warning ("Could not generate thumbnail for %s", uri);
-            gnome_thumbnail_factory_create_failed_thumbnail (thumbnail_factory, uri, mtime);
-          }
-      }
-
-    return pixbuf;   
 }
 
 /**
@@ -851,11 +785,23 @@ shell_global_grab_dbus_service (ShellGlobal *global)
        */
       exit (0);  
     }
-  
+
+  /* Also grab org.gnome.Panel to replace any existing panel process */
+  if (!dbus_g_proxy_call (bus, "RequestName", &error,
+                          G_TYPE_STRING, "org.gnome.Panel",
+                          G_TYPE_UINT, DBUS_NAME_FLAG_REPLACE_EXISTING | DBUS_NAME_FLAG_DO_NOT_QUEUE,
+                          G_TYPE_INVALID,
+                          G_TYPE_UINT, &request_name_result,
+                          G_TYPE_INVALID))
+    {
+      g_print ("failed to acquire org.gnome.Panel: %s\n", error->message);
+      exit (1);
+    }
+
   g_object_unref (bus);
 }
 
-void 
+void
 shell_global_start_task_panel (ShellGlobal *global)
 {
   const char* panel_args[] = {"gnomeshell-taskpanel", SHELL_DBUS_SERVICE, NULL};
@@ -1061,6 +1007,44 @@ root_pixmap_destroy (GObject *sender, gpointer data)
   gdk_window_remove_filter (gdk_get_default_root_window (),
                             root_window_filter, global);
   global->root_pixmap = NULL;
+}
+
+/**
+ * shell_global_format_time_relative_pretty:
+ * @global:
+ * @delta: Time in seconds since the current time
+ * @text: (out): Relative human-consumption-only time string
+ * @next_update: (out): Time in seconds until we should redisplay the time
+ *
+ * Format a time value for human consumption only.  The passed time
+ * value is a delta in terms of seconds from the current time.
+ */
+void
+shell_global_format_time_relative_pretty (ShellGlobal *global,
+                                          guint        delta,
+                                          char       **text,
+                                          guint       *next_update)
+{
+#define MINUTE (60)
+#define HOUR (MINUTE*60)
+#define DAY (HOUR*24)
+#define WEEK (DAY*7)
+  if (delta < MINUTE) {
+    *text = g_strdup (_("Less than a minute ago"));
+    *next_update = MINUTE - delta;
+   } else if (delta < HOUR) {
+     *text = g_strdup_printf (ngettext ("%d minute ago", "%d minutes ago", delta / MINUTE), delta / MINUTE);
+     *next_update = MINUTE*(delta-MINUTE + 1) - delta;
+   } else if (delta < DAY) {
+     *text = g_strdup_printf (ngettext ("%d hour ago", "%d hours ago", delta / HOUR), delta / HOUR);
+     *next_update = HOUR*(delta-HOUR + 1) - delta;
+   } else if (delta < WEEK) {
+     *text = g_strdup_printf (ngettext ("%d day ago", "%d days ago", delta / DAY), delta / DAY);
+     *next_update = DAY*(delta-DAY + 1) - delta;
+   } else {
+     *text = g_strdup_printf (ngettext ("%d week ago", "%d weeks ago", delta / WEEK), delta / WEEK);
+     *next_update = WEEK*(delta-WEEK + 1) - delta;
+   }
 }
 
 /**
