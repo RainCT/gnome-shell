@@ -6,6 +6,7 @@ const Gtk = imports.gi.Gtk;
 const Lang = imports.lang;
 const Shell = imports.gi.Shell;
 const Signals = imports.signals;
+const Mainloop = imports.mainloop;
 
 const DocInfo = imports.misc.docInfo;
 const GenericDisplay = imports.ui.genericDisplay;
@@ -13,6 +14,8 @@ const Zeitgeist = imports.misc.zeitgeist;
 const Main = imports.ui.main;
 
 /* This class represents a single display item containing information about a document.
+ * We take the current number of seconds in the constructor to avoid looking up the current
+ * time for every item when they are created in a batch.
  *
  * docInfo - DocInfo object containing information about the document
  * currentSeconds - current number of seconds since the epoch
@@ -28,17 +31,17 @@ DocDisplayItem.prototype = {
     _init : function(docInfo, currentSecs, availableWidth) {
         GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth);
         this._docInfo = docInfo;
-
+       
         this._setItemInfo(docInfo.name, "");
-        // We take the current number of seconds here to avoid looking up the current
-        // time for every item
+
+        this._timeoutTime = -1;
         this._resetTimeDisplay(currentSecs);
     },
 
     //// Public methods ////
 
-    getUpdateTimeout: function() {
-        return this._timeout;
+    getUpdateTimeoutTime: function() {
+        return this._timeoutTime;
     },
 
     // Update any relative-time based displays for this item.
@@ -78,11 +81,12 @@ DocDisplayItem.prototype = {
 
     //// Private Methods ////
 
+    // Updates the last visited time displayed in the description text for the item. 
     _resetTimeDisplay: function(currentSecs) {
         let lastSecs = this._docInfo.lastVisited().getTime() / 1000;
         let timeDelta = currentSecs - lastSecs;
         let [text, nextUpdate] = Shell.Global.get().format_time_relative_pretty(timeDelta);
-        this._timeout = nextUpdate;
+        this._timeoutTime = currentSecs + nextUpdate;
         this._setDescriptionText(text);
     }
 };
@@ -103,7 +107,12 @@ DocDisplay.prototype = {
         GenericDisplay.GenericDisplay.prototype._init.call(this, width);
         let me = this;
 
-        this._updateTimeoutTarget = 0;
+        // We keep a single timeout callback for updating last visited times
+        // for all the items in the display. This avoids creating individual
+        // callbacks for each item in the display. So proper time updates
+        // for individual items and item details depend on the item being 
+        // associated with one of the displays.
+        this._updateTimeoutTargetTime = -1;
         this._updateTimeoutId = 0;
 
         Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
@@ -186,24 +195,37 @@ DocDisplay.prototype = {
     // Creates a DocDisplayItem based on itemInfo, which is expected to be a DocInfo object.
     _createDisplayItem: function(itemInfo, width) {
         let currentSecs = new Date().getTime() / 1000;
-        let doc = new DocDisplayItem(itemInfo, currentSecs, width);
-        if (doc.getUpdateTimeout() < this._updateTimeoutTarget) {
-            if (this._updateTimeoutId > 0)
-                Mainloop.source_remove(this._updateTimeoutId);
-            this._updateTimeoutId = Mainloop.timeout_add_seconds(doc.getUpdateTimeout(), Lang.bind(this, this._docTimeout));
-            this._updateTimeoutTarget = doc.getUpdateTimeout();
-        }
-        return doc;
+        let docDisplayItem = new DocDisplayItem(itemInfo, currentSecs, width);
+        this._updateTimeoutCallback(docDisplayItem, currentSecs);
+        return docDisplayItem;
     },
 
     //// Private Methods ////
+
+    // A callback function that redisplays the items, updating their descriptions,
+    // and sets up a new timeout callback.
     _docTimeout: function () {
         let currentSecs = new Date().getTime() / 1000;
-        for (let docId in this._allItems) {
-            let doc = this._allItems[docId];
-            doc.redisplay(currentSecs);
+        this._updateTimeoutId = 0;
+        this._updateTimeoutTargetTime = -1;
+        for (let docId in this._displayedItems) {
+            let docDisplayItem = this._displayedItems[docId];
+            docDisplayItem.redisplay(currentSecs);          
+            this._updateTimeoutCallback(docDisplayItem, currentSecs);
         }
-        return true;
+        return false;
+    },
+
+    // Updates the timeout callback if the timeout time for the docDisplayItem 
+    // is earlier than the target time for the current timeout callback.
+    _updateTimeoutCallback: function (docDisplayItem, currentSecs) {
+        let timeoutTime = docDisplayItem.getUpdateTimeoutTime();
+        if (this._updateTimeoutTargetTime < 0 || timeoutTime < this._updateTimeoutTargetTime) {
+            if (this._updateTimeoutId > 0)
+                Mainloop.source_remove(this._updateTimeoutId);
+            this._updateTimeoutId = Mainloop.timeout_add_seconds(timeoutTime - currentSecs, Lang.bind(this, this._docTimeout));
+            this._updateTimeoutTargetTime = timeoutTime;
+        }
     }
 };
 
