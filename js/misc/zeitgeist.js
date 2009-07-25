@@ -98,7 +98,7 @@ RecentDocsWatcher.prototype = {
                 if (docInfo.exists())
                     items.push(docInfo);
             }
-            items.sort(function (a,b) { return b.lastVisited() - a.lastVisited() });
+            items.sort(function (a,b) { return b.timestamp - a.timestamp });
         }
 
         for (i = 0; i < this._callbacks.length; i++)

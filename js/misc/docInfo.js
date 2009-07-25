@@ -36,8 +36,13 @@ DocInfo.prototype = {
         } else {
             // Item from GtkRecentlyUsed
             this._recentInfo = item;
-            this.name = item.get_display_name();
+            // We actually used get_modified() instead of get_visited()
+            // here, as GtkRecentInfo doesn't updated get_visited()
+            // correctly. See http://bugzilla.gnome.org/show_bug.cgi?id=567094
+            log(item.get_modified().getTime() + " " +  item.get_modified().getTime() / 1000);
+            this.timestamp = item.get_modified().getTime() / 1000;
             this.uri = item.get_uri();
+            this.name = item.get_display_name();
             this.mimeType = item.get_mime_type();
             this.app = item.last_application();
         }
@@ -138,19 +143,6 @@ DocInfo.prototype = {
             return this._recentInfo.exists();
         } else {
             return true; // FIXME
-        }
-    },
-
-    lastVisited : function() {
-        // We actually used get_modified() instead of get_visited()
-        // here, as GtkRecentInfo doesn't updated get_visited()
-        // correctly. See
-        // http://bugzilla.gnome.org/show_bug.cgi?id=567094
-
-        if (this._recentInfo) {
-            return this._recentInfo.get_modified();
-        } else {
-            return this.timestamp;
         }
     }
 };
