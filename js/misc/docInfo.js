@@ -39,7 +39,6 @@ DocInfo.prototype = {
             // We actually used get_modified() instead of get_visited()
             // here, as GtkRecentInfo doesn't updated get_visited()
             // correctly. See http://bugzilla.gnome.org/show_bug.cgi?id=567094
-            log(item.get_modified().getTime() + " " +  item.get_modified().getTime() / 1000);
             this.timestamp = item.get_modified().getTime() / 1000;
             this.uri = item.get_uri();
             this.name = item.get_display_name();
@@ -53,43 +52,6 @@ DocInfo.prototype = {
             return Shell.TextureCache.get_default().load_recent_thumbnail(size, this._recentInfo);
         else
             return Shell.TextureCache.get_default().load_thumbnail(size, this.uri, this.mimeType);
-/*
-        let icon = new Clutter.Texture();
-        let iconPixbuf;
-
-        if (this.uri.match("^file://"))
-            iconPixbuf = Shell.get_thumbnail(this.uri, this.mimeType);
-
-        if (iconPixbuf) {
-            // We calculate the width and height of the texture so as
-            // to preserve the aspect ratio of the thumbnail. Because
-            // the images generated based on thumbnails don't have an
-            // internal padding like system icons do, we create a
-            // slightly smaller texture and then create a group around
-            // it for padding purposes
-
-            let scalingFactor = (size - THUMBNAIL_ICON_MARGIN * 2) / Math.max(iconPixbuf.get_width(), iconPixbuf.get_height());
-            icon.set_width(Math.ceil(iconPixbuf.get_width() * scalingFactor));
-            icon.set_height(Math.ceil(iconPixbuf.get_height() * scalingFactor));
-            Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
-
-            let group = new Clutter.Group({ width: size,
-                                            height: size });
-            group.add_actor(icon);
-            icon.set_position(THUMBNAIL_ICON_MARGIN, THUMBNAIL_ICON_MARGIN);
-            return group;
-        } else {
-            if (this._recentInfo) {
-                iconPixbuf = this._recentInfo.get_icon(size);
-            } else {
-                iconPixbuf = Shell.get_icon_for_mime_type(this.mimeType, size);
-                if (!iconPixbuf) {
-                    iconPixbuf = Gtk.IconTheme.get_default().load_icon("gtk-file", size, 0);
-                }
-            }
-            Shell.clutter_texture_set_from_pixbuf(icon, iconPixbuf);
-            return icon;
-        }*/
     },
 
     launch : function() {
