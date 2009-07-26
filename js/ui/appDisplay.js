@@ -128,10 +128,13 @@ AppDisplayItem.prototype = {
         if (excp)
             this._recentItems.text = 'Couldn\'t retrieve items from Zeitgeist.';
         else {
-            let item;
-            for (i = 0; i < docs.length; i++) {
+            let item, currentSecs, displayItem;
+            for (let i = 0; i < docs.length; i++) {
                 item = new DocInfo.DocInfo (docs[i]);
-                displayItem = new DocDisplay.DocDisplayItem(item, this._availableWidth);
+                let currentSecs = new Date().getTime() / 1000;
+                displayItem = new DocDisplay.DocDisplayItem(item,
+                                                            currentSecs,
+                                                            this._availableWidth);
                 this._list.add_actor(displayItem.actor);
             }
             this._recentItems.text = '';
