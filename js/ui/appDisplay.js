@@ -117,7 +117,8 @@ AppDisplayItem.prototype = {
         this._recentDocs.append(this._list, Big.BoxPackFlags.EXPAND);
 
         Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, 'item',
-            [{ mimetypes: ['text/plain']}], Lang.bind(this, this._setRecentItems));
+            [{ application: [this._appInfo.get_desktop_file_path()]}],
+            Lang.bind(this, this._setRecentItems));
 
         details.append(this._recentDocs, Big.BoxPackFlags.EXPAND);
 
