@@ -22,6 +22,9 @@ const Workspaces = imports.ui.workspaces;
 const ENTERED_MENU_COLOR = new Clutter.Color();
 ENTERED_MENU_COLOR.from_pixel(0x00ff0022);
 
+//const SEPARATOR_COLOR = new Clutter.Color();
+//SEPARATOR_COLOR.from_pixel(0xffffffbb);
+
 const APP_ICON_SIZE = 48;
 const APP_PADDING = 18;
 
@@ -114,9 +117,17 @@ AppDisplayItem.prototype = {
         this._list = new Shell.OverflowList({ width: this._availableWidth,
                                               spacing: 6.0,
                                               item_height: GenericDisplay.ITEM_DISPLAY_HEIGHT });
+        this._uris_in_list = [];
         this._recentDocs.append(this._list, Big.BoxPackFlags.EXPAND);
 
+        // Most recently used
         Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, 'item',
+            [{ application: [this._appInfo.get_desktop_file_path()]}],
+            Lang.bind(this, this._setRecentItems));
+
+        // Most often used the last 30 days
+        Zeitgeist.iface.FindEventsRemote(new Date().getTime() / 1000 - 2592000,
+            0, 3, false, 'mostused',
             [{ application: [this._appInfo.get_desktop_file_path()]}],
             Lang.bind(this, this._setRecentItems));
 
@@ -130,13 +141,18 @@ AppDisplayItem.prototype = {
             this._recentItems.text = 'Couldn\'t retrieve items from Zeitgeist.';
         else {
             let item, currentSecs, displayItem;
+            //if (this._list.get_children().length > 0) {
+            //    this._list.add_actor(new Clutter.Rectangle({ color: SEPARATOR_COLOR, height: 5 });
             for (let i = 0; i < docs.length; i++) {
                 item = new DocInfo.DocInfo (docs[i]);
+                if (this._uris_in_list.indexOf(item.uri) >= 0)
+                    continue;
                 let currentSecs = new Date().getTime() / 1000;
                 displayItem = new DocDisplay.DocDisplayItem(item,
                                                             currentSecs,
                                                             this._availableWidth);
                 this._list.add_actor(displayItem.actor);
+                this._uris_in_list.push(item.uri);
             }
             this._recentItems.text = '';
         }
