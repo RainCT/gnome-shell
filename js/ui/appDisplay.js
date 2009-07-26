@@ -128,6 +128,7 @@ AppDisplayItem.prototype = {
             [{ application: [this._appInfo.get_desktop_file_path()]}],
             Lang.bind(this, this._setRecentItems));
 
+        this._details = details;
         return details;
     },
     
@@ -149,7 +150,7 @@ AppDisplayItem.prototype = {
                 this._list.add_actor(displayItem.actor);
                 this._uris_in_list.push(item.uri);
             }
-            this._recentItems.text = '';
+            this._details.remove_actor(this._recentItems);
         }
     }
 };
