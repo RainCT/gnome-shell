@@ -56,7 +56,6 @@ AppDisplayItem.prototype = {
         return this._appInfo.get_id();
     },
 
-
     //// Public method overrides ////
 
     // Opens an application represented by this display item.

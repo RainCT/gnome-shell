@@ -164,6 +164,16 @@ DocDisplay.prototype = {
         this._matchedItems.sort(Lang.bind(this, function (a,b) { return this._compareItems(a,b); }));
     },
 
+    // Compares items associated with the item ids based on how recently the items
+    // were last visited.
+    // Returns an integer value indicating the result of the comparison.
+   _compareItems : function(itemIdA, itemIdB) {
+        let docA = this._allItems[itemIdA];
+        let docB = this._allItems[itemIdB];
+
+        return docB.timestamp - docA.timestamp;
+    },
+
     // Checks if the item info can be a match for the search string by checking
     // the name of the document. Item info is expected to be GtkRecentInfo.
     // Returns a boolean flag indicating if itemInfo is a match.
@@ -180,16 +190,6 @@ DocDisplay.prototype = {
         // TODO: we can also check doc URIs, so that
         // if you search for a directory name, we display recent files from it
         return false;
-    },
-
-    // Compares items associated with the item ids based on how recently the items
-    // were last visited.
-    // Returns an integer value indicating the result of the comparison.
-   _compareItems : function(itemIdA, itemIdB) {
-        let docA = this._allItems[itemIdA];
-        let docB = this._allItems[itemIdB];
-
-        return docB.timestamp - docA.timestamp;
     },
 
     // Creates a DocDisplayItem based on itemInfo, which is expected to be a DocInfo object.

@@ -174,19 +174,6 @@ GenericDisplayItem.prototype = {
        this._bg.background_color = color;
     },
 
-    // Destoys the item.
-    destroy: function() {
-      this.actor.destroy();
-    },
-    
-    //// Pure virtual public methods ////
-  
-    // Performes an action associated with launching this item, such as opening a file or an application.
-    launch: function() {
-        throw new Error("Not implemented");
-    },
-
-
     /*
      * Returns an actor containing item details. In the future details can have more information than what 
      * the preview pop-up has and be item-type specific.
@@ -240,6 +227,18 @@ GenericDisplayItem.prototype = {
         }
 
         return this._createCustomDetailsActor(details);
+    },
+
+    // Destoys the item.
+    destroy: function() {
+      this.actor.destroy();
+    },
+    
+    //// Pure virtual public methods ////
+  
+    // Performes an action associated with launching this item, such as opening a file or an application.
+    launch: function() {
+        throw new Error("Not implemented");
     },
 
     //// Protected methods ////

@@ -31,7 +31,7 @@ DocInfo.prototype = {
             this.bookmark = item["bookmark"];
             //this.usage = item["usage"];
             this.icon = item["icon"];
-            this.app = item["app"];
+            this.app = item["app"];      // !!!!!!!!!!!!!!!!!!!!!!!!
             //this.origin = item["origin"];
         } else {
             // Item from GtkRecentlyUsed
@@ -101,11 +101,10 @@ DocInfo.prototype = {
     },
 
     exists : function() {
-        if (this._recentInfo) {
+        if (this._recentInfo)
             return this._recentInfo.exists();
-        } else {
+        else
             return true; // FIXME
-        }
     }
 };
 
