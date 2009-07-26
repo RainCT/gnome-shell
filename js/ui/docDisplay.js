@@ -1,5 +1,6 @@
 /* -*- mode: js2; js2-basic-offset: 4; indent-tabs-mode: nil -*- */
 
+const Big = imports.gi.Big;
 const Clutter = imports.gi.Clutter;
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
@@ -77,6 +78,47 @@ DocDisplayItem.prototype = {
 
         return Shell.TextureCache.get_default().load_uri_sync(Shell.TextureCachePolicy.NONE,
                                                               this._docInfo.uri, availableWidth, availableHeight);
+    },
+
+    _createCustomDetailsActor: function(details) {
+        // Add information from Zeitgeist
+        
+        this._zeitgeistInfo = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                       spacing: GenericDisplay.PREVIEW_BOX_SPACING });
+        this._usageInfo = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
+                                             font_name: "Sans 14px",
+                                             line_wrap: true,
+                                             text: "Retrieving usage information..." });
+        this._countUsedEver = this._countUsedMonth = null;
+        this._zeitgeistInfo.append(this._usageInfo, Big.BoxPackFlags.EXPAND);
+
+        // FIXME: Ensure the URI is escaped properly (so that it contains no wildcards)
+        Zeitgeist.iface.CountEventsRemote(0, 0, 'event', [{ uri: this._docInfo.uri}],
+            Lang.bind(this, function(result, excp) {
+                    this._countUsedEver = (excp) ? -1 : result;
+                    this._showUsageInfo()
+                }));
+
+        Zeitgeist.iface.CountEventsRemote(new Date().getTime() / 1000 - 2592000,
+            0, 'event', [{ uri: this._docInfo.uri}],
+            Lang.bind(this, function(result, excp) {
+                    this._countUsedMonth = (excp) ? -1 : result;
+                    this._showUsageInfo();
+                }));
+
+        details.append(this._zeitgeistInfo, Big.BoxPackFlags.EXPAND);
+
+        return details;
+    },
+
+    _showUsageInfo: function() {
+        if (this._countUsedEver != null && this._countUsedMonth != null) {
+            if (this._countUsedEver >= 0 && this._countUsedMonth >= 0)
+                this._usageInfo.text = 'File used ' + this._countUsedEver +
+                    ' times (' + this._countUsedMonth + ' within the last 30 days).'
+            else
+                this._usageInfo.text = 'Couldn\'t retrive usage information from Zeitgeist for: ' + this._docInfo.uri
+        }
     },
 
     //// Private Methods ////
