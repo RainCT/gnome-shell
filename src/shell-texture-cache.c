@@ -476,7 +476,7 @@ load_pixbuf_thread (GSimpleAsyncResult *result,
         {
           pixbuf = gtk_recent_info_get_icon (data->recent_info, data->width);
         }
-      else
+      else if (!pixbuf)
         {
           GIcon *icon = icon_for_mimetype (mimetype);
           
