@@ -22,8 +22,8 @@ const Workspaces = imports.ui.workspaces;
 const ENTERED_MENU_COLOR = new Clutter.Color();
 ENTERED_MENU_COLOR.from_pixel(0x00ff0022);
 
-//const SEPARATOR_COLOR = new Clutter.Color();
-//SEPARATOR_COLOR.from_pixel(0xffffffbb);
+const SEPARATOR_COLOR = new Clutter.Color();
+SEPARATOR_COLOR.from_pixel(0xffffffbb);
 
 const APP_ICON_SIZE = 48;
 const APP_PADDING = 18;
@@ -95,62 +95,77 @@ AppDisplayItem.prototype = {
         }
     },
 
-    _createCustomDetailsActor: function(details) {
+    _createCustomDetailsActor: function() {
         // Add related documents from Zeitgeist
-        
-        details.append(new Clutter.Text(), Big.BoxPackFlags.NONE);
+        this._details.append(new Clutter.Text(), Big.BoxPackFlags.NONE);
         let recentTitle = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                              font_name: "Sans bold 14px",
                                              line_wrap: true,
                                              text: "Related documents" });
-        details.append(recentTitle, Big.BoxPackFlags.EXPAND);
+        this._details.append(recentTitle, Big.BoxPackFlags.EXPAND);
 
         this._recentItems = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                                     font_name: "Sans 14px",
                                                     line_wrap: true,
                                                     text: "Loading..." });
-        details.append(this._recentItems, Big.BoxPackFlags.EXPAND);
+        this._details.append(this._recentItems, Big.BoxPackFlags.EXPAND);
 
-        this._list = new Shell.OverflowList({ width: this._availableWidth,
-                                              spacing: 6.0,
-                                              item_height: GenericDisplay.ITEM_DISPLAY_HEIGHT });
         this._uris_in_list = [];
-        details.append(this._list, Big.BoxPackFlags.EXPAND);
-
-        // Most recently used
-        Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, 'item',
-            [{ application: [this._appInfo.get_desktop_file_path()]}],
-            Lang.bind(this, this._setRecentItems));
+        this._mostUsedDocs = this._recentlyUsedDocs = null;
 
         // Most often used the last 30 days
         Zeitgeist.iface.FindEventsRemote(new Date().getTime() / 1000 - 2592000,
             0, 3, false, 'mostused',
             [{ application: [this._appInfo.get_desktop_file_path()]}],
-            Lang.bind(this, this._setRecentItems));
+            Lang.bind(this, function(result, excp) {
+                    this._mostUsedDocs = (excp) ? -1 : result;
+                    this._detailsActorShowRelatedItems();
+                }));
 
-        this._details = details;
-        return details;
+        // Most recently used
+        Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, 'item',
+            [{ application: [this._appInfo.get_desktop_file_path()]}],
+            Lang.bind(this, function(result, excp) {
+                    this._recentlyUsedDocs = (excp) ? -1 : result;
+                    this._detailsActorShowRelatedItems();
+                }));
+
+        return this._details;
     },
-    
-    _setRecentItems: function(docs, excp) {
-        if (excp)
-            this._recentItems.text = 'Couldn\'t retrieve items from Zeitgeist.';
-        else {
-            let item, currentSecs, displayItem;
-            //if (this._list.get_children().length > 0) {
-            //    this._list.add_actor(new Clutter.Rectangle({ color: SEPARATOR_COLOR, height: 5 });
-            for (let i = 0; i < docs.length; i++) {
-                item = new DocInfo.DocInfo (docs[i]);
-                if (this._uris_in_list.indexOf(item.uri) >= 0)
-                    continue;
-                let currentSecs = new Date().getTime() / 1000;
-                displayItem = new DocDisplay.DocDisplayItem(item,
-                                                            currentSecs,
-                                                            this._availableWidth);
-                this._list.add_actor(displayItem.actor);
-                this._uris_in_list.push(item.uri);
-            }
-            this._details.remove_actor(this._recentItems);
+
+    _detailsActorAddDocumentList: function(docs) {
+        let list = new Shell.OverflowList({ width: this._availableWidth,
+                                            spacing: 6.0,
+                                            item_height: GenericDisplay.ITEM_DISPLAY_HEIGHT });
+        let i, item, displayItem;
+        let numItemsBefore = this._uris_in_list.length;
+        for (i = 0; i < docs.length; i++) {
+            item = new DocInfo.DocInfo (docs[i]);
+            if (this._uris_in_list.indexOf(item.uri) >= 0 || !item.exists())
+                continue;
+            displayItem = new DocDisplay.DocDisplayItem(item,
+                                                        new Date().getTime() / 1000,
+                                                        this._availableWidth);
+            list.add_actor(displayItem.actor);
+            this._uris_in_list.push(item.uri);
+        }
+
+        if (this._uris_in_list.length == numItemsBefore)
+            return
+        if (numItemsBefore)
+            this._details.append(new Clutter.Rectangle({ color: SEPARATOR_COLOR, height: 1 }),
+                                 Big.BoxPackFlags.EXPAND);
+        this._details.append(list, Big.BoxPackFlags.EXPAND);
+    },
+
+    _detailsActorShowRelatedItems: function() {
+        if (this._mostUsedDocs != null && this._recentlyUsedDocs != null) {
+            if (this._mostUsedDocs != -1 && this._recentlyUsedDocs != -1) {
+                this._detailsActorAddDocumentList(this._mostUsedDocs);
+                this._detailsActorAddDocumentList(this._recentlyUsedDocs);
+                this._details.remove_actor(this._recentItems);
+            } else
+                this._recentItems.text = 'Couldn\'t retrieve related documents information from Zeitgeist.'
         }
     }
 };

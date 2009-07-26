@@ -80,17 +80,14 @@ DocDisplayItem.prototype = {
                                                               this._docInfo.uri, availableWidth, availableHeight);
     },
 
-    _createCustomDetailsActor: function(details) {
+    _createCustomDetailsActor: function() {
         // Add information from Zeitgeist
-        
-        this._zeitgeistInfo = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
-                                       spacing: GenericDisplay.PREVIEW_BOX_SPACING });
         this._usageInfo = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                              font_name: "Sans 14px",
                                              line_wrap: true,
                                              text: "Retrieving usage information..." });
         this._countUsedEver = this._countUsedMonth = null;
-        this._zeitgeistInfo.append(this._usageInfo, Big.BoxPackFlags.EXPAND);
+        this._details.append(this._usageInfo, Big.BoxPackFlags.EXPAND);
 
         // FIXME: Ensure the URI is escaped properly (so that it contains no wildcards)
         Zeitgeist.iface.CountEventsRemote(0, 0, 'event', [{ uri: this._docInfo.uri}],
@@ -106,18 +103,16 @@ DocDisplayItem.prototype = {
                     this._showUsageInfo();
                 }));
 
-        details.append(this._zeitgeistInfo, Big.BoxPackFlags.EXPAND);
-
-        return details;
+        return this._details;
     },
 
     _showUsageInfo: function() {
         if (this._countUsedEver != null && this._countUsedMonth != null) {
-            if (this._countUsedEver >= 0 && this._countUsedMonth >= 0)
+            if (this._countUsedEver != -1 && this._countUsedMonth != -1)
                 this._usageInfo.text = 'File used ' + this._countUsedEver +
                     ' times (' + this._countUsedMonth + ' within the last 30 days).'
             else
-                this._usageInfo.text = 'Couldn\'t retrive usage information from Zeitgeist for: ' + this._docInfo.uri
+                this._usageInfo.text = 'Couldn\'t retrieve usage information from Zeitgeist for: ' + this._docInfo.uri
         }
     },
 

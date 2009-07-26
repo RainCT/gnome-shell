@@ -226,7 +226,8 @@ GenericDisplayItem.prototype = {
             details.append(largePreview, Big.BoxPackFlags.NONE);
         }
 
-        return this._createCustomDetailsActor(details);
+        this._details = details;
+        return this._createCustomDetailsActor();
     },
 
     // Destoys the item.
