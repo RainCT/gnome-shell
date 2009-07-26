@@ -340,51 +340,6 @@ shell_clutter_texture_set_from_pixbuf (ClutterTexture *texture,
 }
 
 /**
- * shell_get_icon_for_mime_type:
- *
- * @mime_type: Mime-Type for which you want to get an icon
- * @pixel_size: Size you want the icon to have (in pixels)
- *
- * This function has been taken from gtk/gtkrecentmanager.c, which
- * is copyright (c) 2006 Emmanuele Bassi.
- *
- * Return value: #GdkPixbuf containing an icon matching the indicated
- *               @mime_type if one is found, %NULL otherwise
- */
-GdkPixbuf *
-shell_get_icon_for_mime_type (const char *mime_type,
-                              gint        pixel_size)
-{
-    GtkIconTheme *icon_theme;
-    char *content_type;
-    GIcon *icon;
-    GtkIconInfo *info;
-    GdkPixbuf *pixbuf;
-
-    icon_theme = gtk_icon_theme_get_default ();
-    content_type = g_content_type_from_mime_type (mime_type);
-
-    if (!content_type)
-        return NULL;
-
-    icon = g_content_type_get_icon (content_type);
-    info = gtk_icon_theme_lookup_by_gicon (icon_theme,
-                                           icon,
-                                           pixel_size,
-                                           GTK_ICON_LOOKUP_USE_BUILTIN);
-    g_free (content_type);
-    g_object_unref (icon);
-
-    if (!info)
-        return NULL;
-
-    pixbuf = gtk_icon_info_load_icon (info, NULL);
-    gtk_icon_info_free (info);
-
-    return pixbuf;
-}
-
-/**
  * shell_get_event_key_symbol:
  *
  * Return value: Clutter key value for the key press and release events, 

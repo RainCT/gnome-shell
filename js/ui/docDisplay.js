@@ -116,7 +116,7 @@ DocDisplay.prototype = {
         this._updateTimeoutId = 0;
 
         Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
-            this._refreshCache), 50); // FIXME: Do not hardcode 500. Use iterators or sth else.
+            this._refreshCache), 500); // FIXME: Do not hardcode 500. Use iterators or sth else.
 
         this.connect('destroy', Lang.bind(this, function (o) {
             if (this._updateTimeoutId > 0)

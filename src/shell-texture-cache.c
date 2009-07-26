@@ -429,6 +429,21 @@ impl_load_thumbnail (ShellTextureCache *cache,
    return pixbuf;
 }
 
+static GIcon *
+icon_for_mimetype (const char *mimetype)
+{
+  char *content_type;
+  GIcon *icon;
+
+  content_type = g_content_type_from_mime_type (mimetype);
+  if (!content_type)
+    return NULL;
+
+  icon = g_content_type_get_icon (content_type);
+  g_free (content_type);
+  return icon;
+}
+
 static void
 load_pixbuf_thread (GSimpleAsyncResult *result,
                     GObject *object,
@@ -460,6 +475,23 @@ load_pixbuf_thread (GSimpleAsyncResult *result,
       if (!pixbuf && data->recent_info)
         {
           pixbuf = gtk_recent_info_get_icon (data->recent_info, data->width);
+        }
+      else
+        {
+          GIcon *icon = icon_for_mimetype (mimetype);
+          
+          GtkIconInfo *info = gtk_icon_theme_lookup_by_gicon (
+                                gtk_icon_theme_get_default (),
+                                icon,
+                                data->width,
+                                GTK_ICON_LOOKUP_USE_BUILTIN);
+          g_object_unref (icon);
+          
+          if (!info)
+            return NULL;
+          
+          pixbuf = gtk_icon_info_load_icon (info, NULL);
+          gtk_icon_info_free (info);
         }
     }
   else if (data->uri)
@@ -887,6 +919,13 @@ shell_texture_cache_load_thumbnail (ShellTextureCache *cache,
   CacheKey key;
   CoglHandle texdata;
 
+  /* Don't attempt to load thumbnails for non-local URIs */
+  if (!g_str_has_prefix (uri, "file://"))
+    {
+      GIcon *icon = icon_for_mimetype (mimetype);
+      return shell_texture_cache_load_gicon (cache, icon, size);
+    }
+
   texture = CLUTTER_TEXTURE (clutter_texture_new ());
   clutter_actor_set_size (CLUTTER_ACTOR (texture), size, size);
 
@@ -919,8 +958,6 @@ static GIcon *
 icon_for_recent (GtkRecentInfo *info)
 {
   const char *mimetype;
-  char *content_type;
-  GIcon *icon;
 
   mimetype = gtk_recent_info_get_mime_type (info);
   if (!mimetype)
@@ -928,13 +965,7 @@ icon_for_recent (GtkRecentInfo *info)
       return g_themed_icon_new (GTK_STOCK_FILE);
     }
 
-  content_type = g_content_type_from_mime_type (mimetype);
-  if (!content_type)
-    return NULL;
-
-  icon = g_content_type_get_icon (content_type);
-  g_free (content_type);
-  return icon;
+  return icon_for_mimetype(mimetype);
 }
 
 /**
