@@ -98,26 +98,24 @@ AppDisplayItem.prototype = {
     _createCustomDetailsActor: function(details) {
         // Add related documents from Zeitgeist
         
-        this._recentDocs = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
-                                       spacing: GenericDisplay.PREVIEW_BOX_SPACING });
-        this._recentDocs.append(new Clutter.Text(), Big.BoxPackFlags.NONE);
+        details.append(new Clutter.Text(), Big.BoxPackFlags.NONE);
         let recentTitle = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                              font_name: "Sans bold 14px",
                                              line_wrap: true,
                                              text: "Related documents" });
-        this._recentDocs.append(recentTitle, Big.BoxPackFlags.EXPAND);
+        details.append(recentTitle, Big.BoxPackFlags.EXPAND);
 
         this._recentItems = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                                     font_name: "Sans 14px",
                                                     line_wrap: true,
                                                     text: "Loading..." });
-        this._recentDocs.append(this._recentItems, Big.BoxPackFlags.EXPAND);
+        details.append(this._recentItems, Big.BoxPackFlags.EXPAND);
 
         this._list = new Shell.OverflowList({ width: this._availableWidth,
                                               spacing: 6.0,
                                               item_height: GenericDisplay.ITEM_DISPLAY_HEIGHT });
         this._uris_in_list = [];
-        this._recentDocs.append(this._list, Big.BoxPackFlags.EXPAND);
+        details.append(this._list, Big.BoxPackFlags.EXPAND);
 
         // Most recently used
         Zeitgeist.iface.FindEventsRemote(0, 0, 5, false, 'item',
@@ -129,8 +127,6 @@ AppDisplayItem.prototype = {
             0, 3, false, 'mostused',
             [{ application: [this._appInfo.get_desktop_file_path()]}],
             Lang.bind(this, this._setRecentItems));
-
-        details.append(this._recentDocs, Big.BoxPackFlags.EXPAND);
 
         return details;
     },
