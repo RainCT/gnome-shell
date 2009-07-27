@@ -40,13 +40,12 @@ Zeitgeist.prototype = {
 DBus.proxifyPrototype(Zeitgeist.prototype, zeitgeistIface);
 let iface = new Zeitgeist();
 
-
 function RecentDocsWatcher() {
     this._init();
 }
 
 RecentDocsWatcher.prototype = {
-    
+
     _init : function() {
         this._numberOfItems = 0;
         this._callbacks = [];
@@ -61,11 +60,10 @@ RecentDocsWatcher.prototype = {
     },
 
     _updateItems: function(emitter) {
-        if (this._numberOfItems && !this._zeitgeistError) {
+        if (this._numberOfItems)
             iface.FindEventsRemote(0, 0, this._numberOfItems,
                 false, 'item', [{ uri: 'file://%' }],
                 Lang.bind(this, this._recentChanged));
-        }
     },
 
     _zeitgeistQuit: function(emitter) {
@@ -73,23 +71,8 @@ RecentDocsWatcher.prototype = {
         this._recentChanged();
     },
 
-    _recentChanged: function(docs, excp) {
-        let i;
-
-        if (excp || (!docs && this._zeitgeistError == null)) {
-            log('Could not fetch recently used items from Zeitgeist: ' + excp);
-            this._recentManager = Gtk.RecentManager.get_default();
-            this._zeitgeistError = this._recentManager.connect('changed',
-                Lang.bind(this, function(a) { this._recentChanged(); }));
-        }
-
-        if (this._zeitgeistError != null && docs) {
-            log('Recovered connection to Zeitgeist.')
-            this._recentManager.disconnect(this._zeitgeistError);
-            this._zeitgeistError = null;
-        }
-
-        let items = [];
+    _getDocs: function(docs) {
+        let items = [], i;
         if (docs) {
             for (i = 0; i < docs.length; i++)
                 items.push(new DocInfo.DocInfo (docs[i]));
@@ -101,18 +84,39 @@ RecentDocsWatcher.prototype = {
                 if (docInfo.exists())
                     items.push(docInfo);
             }
-            items.sort(function (a,b) { return b.timestamp - a.timestamp });
+            items.sort(function (a, b) { return b.timestamp - a.timestamp });
+        }
+        return items;
+    },
+
+    _recentChanged: function(docs, excp) {
+        if (excp || (!docs && this._zeitgeistError == null)) {
+            if (excp)
+                log('Could not fetch recently used items from Zeitgeist: ' + excp);
+            this._recentManager = Gtk.RecentManager.get_default();
+            this._zeitgeistError = this._recentManager.connect('changed',
+                Lang.bind(this, function(a) { this._recentChanged(); }));
         }
 
-        for (i = 0; i < this._callbacks.length; i++)
+        if (this._zeitgeistError != null && docs) {
+            log('Recovered connection to Zeitgeist.')
+            this._recentManager.disconnect(this._zeitgeistError);
+            this._zeitgeistError = null;
+        }
+
+        let items = this._getDocs(docs);
+        for (let i = 0; i < this._callbacks.length; i++)
             this._callbacks[i](items);
     },
-    
+
     addCallback: function(callback, numberOfItems) {
         if (numberOfItems > this._numberOfItems)
             this._numberOfItems = numberOfItems;
         this._callbacks.push(callback);
-        this._updateItems();
+        if (this._zeitgeistError == null)
+            this._updateItems();
+        else
+            callback(this._getDocs());
     }
 };
 
