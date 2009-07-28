@@ -211,24 +211,29 @@ MenuItem.prototype = {
         }
         if (pixbuf != null)
             Shell.clutter_texture_set_from_pixbuf(this._icon, pixbuf);
-        this.actor.append(this._icon, 0);
+        this.actor.append(this._icon, Big.BoxPackFlags.NONE);
         this._text = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                         font_name: "Sans 14px",
                                         ellipsize: Pango.EllipsizeMode.END,
                                         text: name });
-        this.actor.append(this._text, Big.BoxPackFlags.EXPAND);
 
-        let box = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
-                                y_align: Big.BoxAlignment.CENTER
-                              });
+        // We use individual boxes for the label and the arrow to ensure that they
+        // are aligned vertically. Just setting y_align: Big.BoxAlignment.CENTER
+        // on this.actor does not seem to achieve that.  
+        let labelBox = new Big.Box({ y_align: Big.BoxAlignment.CENTER });
 
-        this._arrow = new Shell.Arrow({ surface_width: MENU_ICON_SIZE/2,
-                                        surface_height: MENU_ICON_SIZE/2,
+        labelBox.append(this._text, Big.BoxPackFlags.NONE);
+       
+        this.actor.append(labelBox, Big.BoxPackFlags.EXPAND);
+
+        let arrowBox = new Big.Box({ y_align: Big.BoxAlignment.CENTER });
+
+        this._arrow = new Shell.Arrow({ surface_width: MENU_ICON_SIZE / 2,
+                                        surface_height: MENU_ICON_SIZE / 2,
                                         direction: Gtk.ArrowType.RIGHT,
-                                        opacity: 0
-                                      });
-        box.append(this._arrow, 0);
-        this.actor.append(box, 0);
+                                        opacity: 0 });
+        arrowBox.append(this._arrow, Big.BoxPackFlags.NONE);
+        this.actor.append(arrowBox, Big.BoxPackFlags.NONE);
     },
 
     getState: function() {
@@ -586,8 +591,7 @@ WellDisplayItem.prototype = {
         this._name = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                         font_name: "Sans 12px",
                                         line_alignment: Pango.Alignment.CENTER,
-                                        line_wrap: true,
-                                        line_wrap_mode: Pango.WrapMode.WORD,
+                                        ellipsize: Pango.EllipsizeMode.END,
                                         text: appInfo.get_name() });
         nameBox.append(this._name, Big.BoxPackFlags.NONE);
         if (this._windows.length > 0) {
@@ -801,7 +805,7 @@ AppWell.prototype = {
         this._runningBox = new Big.Box({ border_color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                          border_top: 1,
                                          corner_radius: 3,
-                                         padding: GenericDisplay.PREVIEW_BOX_PADDING });
+                                         padding_top: GenericDisplay.PREVIEW_BOX_PADDING });
         this._runningArea = new WellArea(width, false);
         this._runningArea.connect('activated', Lang.bind(this, function (a, display) {
             this.emit('activated');
