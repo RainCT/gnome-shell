@@ -205,8 +205,13 @@ GenericDisplayItem.prototype = {
                                                     line_wrap: true,
                                                     text: this._description.text });
         textDetails.append(detailsDescription, Big.BoxPackFlags.NONE);
-
         this._detailsDescriptions.push(detailsDescription);
+
+        this._detailsTags = new Clutter.Text({ color: ITEM_DISPLAY_NAME_COLOR,
+                                                    font_name: "Sans 14px",
+                                                    line_wrap: true,
+                                                    text: "" });
+        textDetails.append(this._detailsTags, Big.BoxPackFlags.NONE);
 
         mainDetails.append(textDetails, Big.BoxPackFlags.EXPAND);
 
@@ -227,6 +232,8 @@ GenericDisplayItem.prototype = {
         }
 
         this._details = details;
+        this._mainDetails = mainDetails;
+        this._textDetails = textDetails;
         return this._createCustomDetailsActor();
     },
 

@@ -86,7 +86,7 @@ DocDisplayItem.prototype = {
                                              font_name: "Sans 14px",
                                              line_wrap: true,
                                              text: "Retrieving usage information..." });
-        this._countUsedEver = this._countUsedMonth = null;
+        this._countUsedEver = this._countUsedMonth = this._itemTags = null;
         this._details.append(this._usageInfo, Big.BoxPackFlags.EXPAND);
 
         // FIXME: Ensure the URI is escaped properly (so that it contains no wildcards)
@@ -102,6 +102,12 @@ DocDisplayItem.prototype = {
                     this._countUsedMonth = (excp) ? -1 : result;
                     this._showUsageInfo();
                 }));
+        
+        Zeitgeist.iface.GetItemsRemote([this._docInfo.uri],
+            Lang.bind(this, function(result, excp) {
+                    this._itemTags = (excp) ? -1 : result[0]['tags'];
+                    this._showUsageInfo();
+                }));
 
         return this._details;
     },
@@ -112,7 +118,14 @@ DocDisplayItem.prototype = {
                 this._usageInfo.text = 'File used ' + this._countUsedEver +
                     ' times (' + this._countUsedMonth + ' within the last 30 days).'
             else
-                this._usageInfo.text = 'Couldn\'t retrieve usage information from Zeitgeist for: ' + this._docInfo.uri
+                this._details.remove_actor(this._usageInfo);
+            this.countUsedEver = this._countUsedMonth = null;
+        } else if (this._itemTags != null) {
+            if (this._itemTags != -1)
+                this._detailsTags.text = this._itemTags;
+            else
+                this._textDetails.remove_actor(this._detailsTags);
+            this._itemTags = null;
         }
     },
 

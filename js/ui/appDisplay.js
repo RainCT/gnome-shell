@@ -134,6 +134,7 @@ AppDisplayItem.prototype = {
                     this._detailsActorShowRelatedItems();
                 }));
 
+        this._textDetails.remove_actor(this._detailsTags);
         return this._details;
     },
 
