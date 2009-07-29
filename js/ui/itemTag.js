@@ -28,9 +28,11 @@ ItemTag.prototype = {
     _init: function(tag, uri) {
         let global = Shell.Global.get();
 
-        this.actor = new Big.Box({ background_color: TAG_DISPLAY_BACKGROUND_COLOR,
+        this.actor = new Big.Box({ reactive: true,
+                                   background_color: TAG_DISPLAY_BACKGROUND_COLOR,
                                    //corner_radius: 4,
                                    padding: 4,
+                                   spacing: 4,
                                    height: TAG_DISPLAY_HEIGHT,
                                    orientation: Big.BoxOrientation.HORIZONTAL });
 
@@ -47,10 +49,6 @@ ItemTag.prototype = {
                                                                       INFORMATION_BUTTON_SIZE,
                                                                       INFORMATION_BUTTON_SIZE);
         this._deleteButton = new Button.iconButton(this.actor, INFORMATION_BUTTON_SIZE, deleteIcon);
-        this._deleteButton.forceShow(true);
-        this._deleteButton.actor.x = -5;
-        this._deleteButton.actor.y = 2;
-
         this._deleteButton.actor.connect('button-release-event',
                                          Lang.bind(this,
                                                    function() {
