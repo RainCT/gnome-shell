@@ -12,7 +12,7 @@ TAG_DISPLAY_NAME_COLOR.from_pixel(0xffffffff);
 const TAG_DISPLAY_BACKGROUND_COLOR = new Clutter.Color();
 TAG_DISPLAY_BACKGROUND_COLOR.from_pixel(0x3d5229ff);
 
-const TAG_DISPLAY_HEIGHT = 22;
+const TAG_DISPLAY_HEIGHT = 23;
 
 // FIXME: Rename this to something generic and import it from genericDisplay.js?
 const INFORMATION_BUTTON_SIZE = 16;
