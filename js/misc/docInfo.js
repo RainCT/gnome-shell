@@ -45,6 +45,15 @@ DocInfo.prototype = {
             this.mimeType = item.get_mime_type();
             this.app = item.last_application();
         }
+    _init : function(recentInfo) {
+        this._recentInfo = recentInfo;
+        // We actually used get_modified() instead of get_visited()
+        // here, as GtkRecentInfo doesn't updated get_visited()
+        // correctly. See http://bugzilla.gnome.org/show_bug.cgi?id=567094
+        this.timestamp = recentInfo.get_modified().getTime() / 1000;
+        this.name = recentInfo.get_display_name();
+        this.uri = recentInfo.get_uri();
+        this.mimeType = recentInfo.get_mime_type();
     },
 
     createIcon : function(size) {
