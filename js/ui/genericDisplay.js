@@ -207,7 +207,7 @@ GenericDisplayItem.prototype = {
         textDetails.append(detailsDescription, Big.BoxPackFlags.NONE);
         this._detailsDescriptions.push(detailsDescription);
 
-        this._detailsTags = new Tidy.Grid({ column_gap: 15 });
+        this._detailsTags = new Tidy.Grid({ column_gap: 10, row_gap: 8 });
         textDetails.append(this._detailsTags, Big.BoxPackFlags.NONE);
 
         mainDetails.append(textDetails, Big.BoxPackFlags.EXPAND);
