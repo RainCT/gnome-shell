@@ -7,7 +7,9 @@ dist_jsui_DATA =		\
 	chrome.js		\
 	dnd.js			\
 	docDisplay.js		\
+	docJournal.js		\
 	genericDisplay.js	\
+	itemTag.js		\
 	link.js			\
 	main.js			\
 	overlay.js		\
