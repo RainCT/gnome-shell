@@ -12,7 +12,7 @@ TAG_DISPLAY_NAME_COLOR.from_pixel(0xffffffff);
 const TAG_DISPLAY_BACKGROUND_COLOR = new Clutter.Color();
 TAG_DISPLAY_BACKGROUND_COLOR.from_pixel(0x3d5229ff);
 
-const TAG_DISPLAY_HEIGHT = 20;
+const TAG_DISPLAY_HEIGHT = 22;
 
 // FIXME: Rename this to something generic and import it from genericDisplay.js?
 const INFORMATION_BUTTON_SIZE = 16;
@@ -31,7 +31,6 @@ ItemTag.prototype = {
         this.actor = new Big.Box({ background_color: TAG_DISPLAY_BACKGROUND_COLOR,
                                    //corner_radius: 4,
                                    padding: 4,
-                                   spacing: 20,
                                    height: TAG_DISPLAY_HEIGHT,
                                    orientation: Big.BoxOrientation.HORIZONTAL });
 
@@ -48,6 +47,7 @@ ItemTag.prototype = {
                                                                       INFORMATION_BUTTON_SIZE,
                                                                       INFORMATION_BUTTON_SIZE);
         this._deleteButton = new Button.iconButton(this.actor, INFORMATION_BUTTON_SIZE, deleteIcon);
+        this._deleteButton.forceShow(true);
         this._deleteButton.actor.x = -5;
         this._deleteButton.actor.y = 2;
 
@@ -69,4 +69,4 @@ ItemTag.prototype = {
     }
 };
 
-//Signals.addSignalMethods(ItemTag.prototype);
+Signals.addSignalMethods(ItemTag.prototype);
