@@ -487,15 +487,18 @@ load_pixbuf_thread (GSimpleAsyncResult *result,
                                 GTK_ICON_LOOKUP_USE_BUILTIN);
           g_object_unref (icon);
 
-          pixbuf = gtk_icon_info_load_icon (info, NULL);
-          if (pixbuf == NULL)
-            pixbuf = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-                                               "gtk-file",
-                                               data->width,
-                                               GTK_ICON_LOOKUP_USE_BUILTIN,
-                                               NULL);
+          if (info)
+            {
+              pixbuf = gtk_icon_info_load_icon (info, NULL);
+              gtk_icon_info_free (info);
+            }
 
-          gtk_icon_info_free (info);
+          if (!pixbuf)
+              pixbuf = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
+                                                 "gtk-file",
+                                                 data->width,
+                                                 GTK_ICON_LOOKUP_USE_BUILTIN,
+                                                 NULL);
         }
     }
   else if (data->uri)
