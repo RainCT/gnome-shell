@@ -20,13 +20,17 @@ const INFORMATION_BUTTON_SIZE = 16;
 /* This is a class that represents a tag. It creates an actor displaying the
  * label inside a box, plus a button to delete the tag.
  */
-function ItemTag(tag, uri) {
-    this._init(tag, uri);
+function ItemTag(parent, tag, uri) {
+    this._init(parent, tag, uri);
 }
 
 ItemTag.prototype = {
-    _init: function(tag, uri) {
+    _init: function(parent, tag, uri) {
         let global = Shell.Global.get();
+
+        this._parent = parent;
+        this._tag = tag;
+        this._uri = uri;
 
         this.actor = new Big.Box({ reactive: true,
                                    background_color: TAG_DISPLAY_BACKGROUND_COLOR,
@@ -52,13 +56,11 @@ ItemTag.prototype = {
         this._deleteButton.actor.connect('button-release-event',
                                          Lang.bind(this,
                                                    function() {
-                                                       log('****** -----------------> clicked ******');
+                                                       // FIXME: Delete the tag from Zeitgeist
+                                                       this._parent.remove_actor(this.actor);
                                                        return true;
                                                     }));
         this.actor.append(this._deleteButton.actor, Big.BoxPackFlags.EXPAND);
-
-        this._tag = tag;
-        this._uri = uri;
     },
 
     // Destroys the item.

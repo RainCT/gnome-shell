@@ -124,7 +124,7 @@ DocDisplayItem.prototype = {
         } else if (this._itemTags != null) {
             if (this._itemTags != -1)
                 for(let i = 0; i < this._itemTags.length; i++)
-                    this._detailsTags.add_actor(new ItemTag.ItemTag(
+                    this._detailsTags.add_actor(new ItemTag.ItemTag(this._detailsTags,
                                                                     this._itemTags[i],
                                                                     this._docInfo.uri).actor);
             else
