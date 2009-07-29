@@ -11,6 +11,7 @@ const Mainloop = imports.mainloop;
 
 const DocInfo = imports.misc.docInfo;
 const GenericDisplay = imports.ui.genericDisplay;
+const ItemTag = imports.ui.itemTag;
 const Zeitgeist = imports.misc.zeitgeist;
 const Main = imports.ui.main;
 
@@ -105,7 +106,7 @@ DocDisplayItem.prototype = {
         
         Zeitgeist.iface.GetItemsRemote([this._docInfo.uri],
             Lang.bind(this, function(result, excp) {
-                    this._itemTags = (excp) ? -1 : result[0]['tags'];
+                    this._itemTags = (excp) ? -1 : result[0]['tags'].split(",");
                     this._showUsageInfo();
                 }));
 
@@ -122,7 +123,10 @@ DocDisplayItem.prototype = {
             this.countUsedEver = this._countUsedMonth = null;
         } else if (this._itemTags != null) {
             if (this._itemTags != -1)
-                this._detailsTags.text = this._itemTags;
+                for(let i = 0; i < this._itemTags.length; i++)
+                    this._detailsTags.add_actor(new ItemTag.ItemTag(
+                                                                    this._itemTags[i],
+                                                                    this._docInfo.uri).actor);
             else
                 this._textDetails.remove_actor(this._detailsTags);
             this._itemTags = null;
