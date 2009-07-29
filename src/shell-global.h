@@ -36,8 +36,6 @@ GType            shell_global_get_type            (void) G_GNUC_CONST;
 gboolean shell_clutter_texture_set_from_pixbuf (ClutterTexture *texture,
                                                 GdkPixbuf      *pixbuf);
 
-GdkPixbuf *shell_get_icon_for_mime_type(const char *mime_type, gint pixel_size);
-
 guint16 shell_get_event_key_symbol(ClutterEvent *event);
 
 guint16 shell_get_button_event_click_count(ClutterEvent *event);
