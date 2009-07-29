@@ -103,8 +103,13 @@ DocInfo.prototype = {
     exists : function() {
         if (this._recentInfo)
             return this._recentInfo.exists();
-        else
-            return true; // FIXME
+        else {
+            if (this.uri.match("^file://")) {
+                let file = Gio.file_new_for_path(this.uri.replace("file://", ""));
+                return (file.query_exists(null) == true) ? true : false;
+            } else
+                return true;
+        }
     }
 };
 

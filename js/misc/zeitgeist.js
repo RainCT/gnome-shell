@@ -75,19 +75,18 @@ RecentDocsWatcher.prototype = {
     },
 
     _getDocs: function(docs) {
-        let items = [], i;
-        if (docs) {
-            for (i = 0; i < docs.length; i++)
-                items.push(new DocInfo.DocInfo (docs[i]));
-        } else {
+        let items = [], i, docInfo;
+        
+        if (!docs) {
             docs = this._recentManager.get_items();
-            for (i = 0; i < docs.length; i++) {
-                let docInfo = new DocInfo.DocInfo (docs[i]);
+            items.sort(function (a, b) { return b.timestamp - a.timestamp });
+        }
+        
+        for (i = 0; i < docs.length; i++) {
+                docInfo = new DocInfo.DocInfo (docs[i]);
 
                 if (docInfo.exists())
                     items.push(docInfo);
-            }
-            items.sort(function (a, b) { return b.timestamp - a.timestamp });
         }
         return items;
     },
