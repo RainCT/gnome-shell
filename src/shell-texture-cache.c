@@ -479,18 +479,22 @@ load_pixbuf_thread (GSimpleAsyncResult *result,
       else if (!pixbuf)
         {
           GIcon *icon = icon_for_mimetype (mimetype);
-          
+
           GtkIconInfo *info = gtk_icon_theme_lookup_by_gicon (
                                 gtk_icon_theme_get_default (),
                                 icon,
                                 data->width,
                                 GTK_ICON_LOOKUP_USE_BUILTIN);
           g_object_unref (icon);
-          
-          if (!info)
-            return NULL;
-          
+
           pixbuf = gtk_icon_info_load_icon (info, NULL);
+          if (pixbuf == NULL)
+            pixbuf = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
+                                               "gtk-file",
+                                               data->width,
+                                               GTK_ICON_LOOKUP_USE_BUILTIN,
+                                               NULL);
+
           gtk_icon_info_free (info);
         }
     }
