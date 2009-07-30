@@ -410,7 +410,7 @@ Dash.prototype = {
 
         // The "More" or search results area
         this._resultsAppsSection = new ItemResults(this._resultsWidth, resultsHeight, AppDisplay.AppDisplay, "Applications");
-        this._resultsDocsSection = new ItemResults(this._resultsWidth, resultsHeight, DocDisplay.DocDisplay, "Documents");
+        this._resultsDocsSection = new ItemResults(this._resultsWidth, resultsHeight, DocJournal.DocJournal, "Journal");
 
         this._resultsPane = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
                                           x: this._width,
@@ -478,9 +478,6 @@ Dash.prototype = {
 
         this.actor.add_actor(this._detailsPane);
         this._detailsPane.hide();
-
-        this._docJournal = new DocJournal.DocJournal()
-        this.actor.add_actor(this._docJournal.actor);
 
         let itemDetailsAvailableWidth = this._detailsWidth - DASH_SECTION_PADDING * 2 - DASH_BORDER_WIDTH * 2;
         let itemDetailsAvailableHeight = detailsHeight - DASH_SECTION_PADDING * 2 - DASH_BORDER_WIDTH * 2;
