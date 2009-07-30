@@ -158,7 +158,6 @@ DocDisplay.prototype = {
 
     _init : function(width) {
         GenericDisplay.GenericDisplay.prototype._init.call(this, width);
-        let me = this;
 
         // We keep a single timeout callback for updating last visited times
         // for all the items in the display. This avoids creating individual
@@ -168,13 +167,17 @@ DocDisplay.prototype = {
         this._updateTimeoutTargetTime = -1;
         this._updateTimeoutId = 0;
 
-        Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
-            this._refreshCache), 500); // FIXME: Do not hardcode 500. Use iterators or sth else.
+        this._connectDocsSource();
 
         this.connect('destroy', Lang.bind(this, function (o) {
             if (this._updateTimeoutId > 0)
                 Mainloop.source_remove(this._updateTimeoutId);
         }));
+    },
+
+    _connectDocsSource : function() {
+      Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
+            this._refreshCache), 500); // FIXME: Do not hardcode 500. Use iterators or sth else.  
     },
 
     //// Protected method overrides ////

@@ -500,7 +500,6 @@ Dash.prototype = {
             me.emit('activated');
         });
         this._docDisplay.connect('selected', Lang.bind(this, function(docDisplay) {
-            this._resultsDocsSection.display.unsetSelected();
             this._resultsAppsSection.display.unsetSelected();
             this._showDetails();
             this._detailsContent.remove_all();
@@ -521,7 +520,6 @@ Dash.prototype = {
         }));
         this._resultsAppsSection.display.connect('selected', Lang.bind(this, function(resultsAppDisplay) {
             this._docDisplay.unsetSelected();
-            this._resultsDocsSection.display.unsetSelected();
             this._showDetails();
             this._detailsContent.remove_all();
             this._detailsContent.append(this._resultsAppsSection.display.selectedItemDetails, Big.BoxPackFlags.NONE);

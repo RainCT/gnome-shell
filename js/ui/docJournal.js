@@ -44,13 +44,32 @@ const DASH_SECTION_PADDING = 6;
 const DASH_SECTION_SPACING = 6;
 const DASH_CORNER_RADIUS = 5;
 
-function DocJournalDay() {
-    this._init();
+function DocJournalDay(width) {
+    this._init(width);
 }
 
 DocJournalDay.prototype = {
-    _init : function() {
-        return null;
+    __proto__:  DocDisplay.DocDisplay.prototype,
+
+    _init : function(width) {
+        DocDisplay.DocDisplay.prototype._init.call(this, width);
+        this.show();
+    },
+
+    _connectDocsSource : function() {
+         let items = [], i, docInfo;
+
+        this._recentManager = Gtk.RecentManager.get_default();
+        let docs = this._recentManager.get_items();
+        items.sort(function (a, b) { return b.timestamp - a.timestamp });
+
+        for (i = 0; i < docs.length; i++) {
+                docInfo = new DocInfo.DocInfo (docs[i]);
+
+                if (docInfo.exists())
+                    items.push(docInfo);
+        }
+        this._refreshCache(items);
     }
 };
 
@@ -60,39 +79,40 @@ function DocJournal(width, height) {
 
 DocJournal.prototype = {
     _init : function(width, height) {
-        let global = Shell.Global.get();
-
-        this.actor = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
-                                   width: width,
+        this.actor = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
                                    reactive: true });
 
-        this._headers = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+        this._rowLeft = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
                                       reactive: true });
-        this.actor.append(this._headers, Big.BoxPackFlags.EXPAND);
+        this.actor.append(this._rowLeft, Big.BoxPackFlags.EXPAND);
+        this._rowMiddle = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                        reactive: true });
+        this.actor.append(this._rowMiddle, Big.BoxPackFlags.EXPAND);
+        this._rowRight = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                       reactive: true });
+        this.actor.append(this._rowRight, Big.BoxPackFlags.EXPAND);
 
         this._textLeft = new Clutter.Text({ color: DASH_TEXT_COLOR,
                                             font_name: "Sans Bold 14px",
-                                            text: "Yesterday" });
+                                            text: "Two days ago" });
+        this._rowLeft.append(this._textLeft, Big.BoxPackFlags.EXPAND);
         this._textMiddle = new Clutter.Text({ color: DASH_TEXT_COLOR,
                                               font_name: "Sans Bold 14px",
-                                              text: "Today" });
+                                              text: "Yesterday" });
+        this._rowMiddle.append(this._textMiddle, Big.BoxPackFlags.EXPAND);
         this._textRight = new Clutter.Text({ color: DASH_TEXT_COLOR,
                                              font_name: "Sans Bold 14px",
-                                             text: "Tomorrow" });
-        this._headers.append(this._textLeft, Big.BoxPackFlags.EXPAND);
-        this._headers.append(this._textMiddle, Big.BoxPackFlags.EXPAND);
-        this._headers.append(this._textRight, Big.BoxPackFlags.EXPAND);
+                                             text: "Today" });
+        this._rowRight.append(this._textRight, Big.BoxPackFlags.EXPAND);
 
+        this._docsLeft = new DocJournalDay(250, DocDisplay.DocDisplay, "");
+        this._rowLeft.append(this._docsLeft.actor, Big.BoxPackFlags.EXPAND);
 
-        /*let docs = new DocJournalDay(250, 600, DocDisplay.DocDisplay, "Yesterday");
-        docs.display.show();
-        this.actor.append(docs.actor, Big.BoxPackFlags.EXPAND);
-        docs = new DocJournalDay(250, 600, DocDisplay.DocDisplay, "Today");
-        docs.display.show();
-        this.actor.append(docs.actor, Big.BoxPackFlags.EXPAND);
-        docs = new DocJournalDay(250, 600, DocDisplay.DocDisplay, "Tomorrow");
-        docs.display.show();
-        this.actor.append(docs.actor, Big.BoxPackFlags.EXPAND);*/
+        this._docsMiddle = new DocJournalDay(250, DocDisplay.DocDisplay, "");
+        this._rowMiddle.append(this._docsMiddle.actor, Big.BoxPackFlags.EXPAND);
+
+        this._docsRight = new DocJournalDay(250, DocDisplay.DocDisplay, "");
+        this._rowRight.append(this._docsRight.actor, Big.BoxPackFlags.EXPAND);
 
         this.displayControl = new Big.Box({ background_color: ITEM_DISPLAY_BACKGROUND_COLOR,
                                             spacing: 12,

@@ -76,12 +76,12 @@ RecentDocsWatcher.prototype = {
 
     _getDocs: function(docs) {
         let items = [], i, docInfo;
-        
+
         if (!docs) {
             docs = this._recentManager.get_items();
             items.sort(function (a, b) { return b.timestamp - a.timestamp });
         }
-        
+
         for (i = 0; i < docs.length; i++) {
                 docInfo = new DocInfo.DocInfo (docs[i]);
 
