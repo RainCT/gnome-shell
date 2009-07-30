@@ -10,6 +10,8 @@ const Signals = imports.signals;
 const Mainloop = imports.mainloop;
 
 const DocInfo = imports.misc.docInfo;
+const DocDisplay = imports.ui.docDisplay;
+const ItemResults = imports.ui.itemResults;
 const Zeitgeist = imports.misc.zeitgeist;
 const Main = imports.ui.main;
 const Panel = imports.ui.panel;
@@ -59,7 +61,7 @@ DocJournal.prototype = {
                                               border: DASH_BORDER_WIDTH,
                                               border_color: DASH_BORDER_COLOR });
 
-        this.actor.append(detailsBackground, Big.BoxPackFlags.EXPAND);
+        this.actor.add_actor(detailsBackground);
 
         let detailsLeft = global.create_horizontal_gradient(PANE_LEFT_COLOR,
                                                             PANE_MIDDLE_COLOR);
@@ -71,10 +73,17 @@ DocJournal.prototype = {
 
         detailsBackground.append(detailsLeft, Big.BoxPackFlags.EXPAND);
         detailsBackground.append(detailsRight, Big.BoxPackFlags.EXPAND);
-        this.actor.append(detailsShadow, Big.BoxPackFlags.NONE);
-
-        this._detailsContent = new Big.Box({ padding: DASH_SECTION_PADDING + DASH_BORDER_WIDTH });
-        this.actor.add_actor(this._detailsContent);
+        this.actor.add_actor(detailsShadow);
+        
+        /*let docs = new DocJournalDay(250, 600, DocDisplay.DocDisplay, "Yesterday");
+        docs.display.show();
+        this.actor.append(docs.actor, Big.BoxPackFlags.EXPAND);
+        docs = new DocJournalDay(250, 600, DocDisplay.DocDisplay, "Today");
+        docs.display.show();
+        this.actor.append(docs.actor, Big.BoxPackFlags.EXPAND);
+        docs = new DocJournalDay(250, 600, DocDisplay.DocDisplay, "Tomorrow");
+        docs.display.show();
+        this.actor.append(docs.actor, Big.BoxPackFlags.EXPAND);*/
     }
 };
 
