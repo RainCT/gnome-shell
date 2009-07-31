@@ -161,9 +161,12 @@ ItemResults.prototype = {
                                    padding: DASH_SECTION_PADDING + DASH_BORDER_WIDTH,
                                    spacing: DASH_SECTION_SPACING });
 
-        this._resultsText = new Clutter.Text({ color: DASH_TEXT_COLOR,
-                                               font_name: "Sans Bold 14px",
-                                               text: labelText });
+        if (labelText != null)
+            this._resultsText = new Clutter.Text({ color: DASH_TEXT_COLOR,
+                                                   font_name: "Sans Bold 14px",
+                                                   text: labelText });
+        else
+            this._resultsText = null;
 
         this.resultsContainer = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
                                          spacing: 4 });
@@ -172,7 +175,7 @@ ItemResults.prototype = {
 
         // LABEL_HEIGHT is the height of this._resultsText and GenericDisplay.LABEL_HEIGHT is the height
         // of the display controls.
-        this._displayHeight = resultsHeight - LABEL_HEIGHT - GenericDisplay.LABEL_HEIGHT - DASH_SECTION_SPACING * 2;
+        this._displayHeight = resultsHeight - ((this._resultsText) ? LABEL_HEIGHT : 0) - GenericDisplay.LABEL_HEIGHT - DASH_SECTION_SPACING * 2;
         this.display = new displayClass(resultsWidth);
 
         this.navArea = this.display.getNavigationArea();
@@ -193,7 +196,8 @@ ItemResults.prototype = {
         this.actor.height = this._resultsHeight /  NUMBER_OF_SECTIONS_IN_SEARCH;
         let displayHeight = this._displayHeight - this._resultsHeight * (NUMBER_OF_SECTIONS_IN_SEARCH - 1) /  NUMBER_OF_SECTIONS_IN_SEARCH;
         this.actor.remove_all();
-        this.actor.append(this._resultsText, Big.BoxPackFlags.NONE);
+        if (this._resultsText)
+            this.actor.append(this._resultsText, Big.BoxPackFlags.NONE);
         this.actor.append(this.resultsContainer, Big.BoxPackFlags.EXPAND);
         this.actor.append(this.controlBox, Big.BoxPackFlags.END);
     },
@@ -203,7 +207,8 @@ ItemResults.prototype = {
             this.navArea.show();
         this.actor.height = this._resultsHeight;
         this.actor.remove_all();
-        this.actor.append(this._resultsText, Big.BoxPackFlags.NONE);
+        if (this._resultsText)
+            this.actor.append(this._resultsText, Big.BoxPackFlags.NONE);
         this.actor.append(this.resultsContainer, Big.BoxPackFlags.EXPAND);
         this.actor.append(this.controlBox, Big.BoxPackFlags.END);
     }
@@ -410,7 +415,7 @@ Dash.prototype = {
 
         // The "More" or search results area
         this._resultsAppsSection = new ItemResults(this._resultsWidth, resultsHeight, AppDisplay.AppDisplay, "Applications");
-        this._resultsDocsSection = new ItemResults(this._resultsWidth, resultsHeight, DocJournal.DocJournal, "Journal");
+        this._resultsDocsSection = new ItemResults(this._resultsWidth, resultsHeight, DocJournal.DocJournal, null);
 
         this._resultsPane = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
                                           x: this._width,
