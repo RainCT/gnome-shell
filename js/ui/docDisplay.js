@@ -89,6 +89,14 @@ DocDisplayItem.prototype = {
         this._countUsedEver = this._countUsedMonth = this._itemTags = null;
         this._details.append(this._usageInfo, Big.BoxPackFlags.EXPAND);
 
+        if (this._docInfo.tags)
+            for(let i = 0; i < this._docInfo.tags.length; i++)
+                this._detailsTags.add_actor(new ItemTag.ItemTag(this._detailsTags,
+                                                                this._docInfo.tags[i],
+                                                                this._docInfo.uri).actor);
+        else
+            this._textDetails.remove_actor(this._detailsTags);
+
         // FIXME: Ensure the URI is escaped properly (so that it contains no wildcards)
         Zeitgeist.iface.CountEventsRemote(0, 0, 'event', [{ uri: this._docInfo.uri}],
             Lang.bind(this, function(result, excp) {
@@ -100,12 +108,6 @@ DocDisplayItem.prototype = {
             0, 'event', [{ uri: this._docInfo.uri}],
             Lang.bind(this, function(result, excp) {
                     this._countUsedMonth = (excp) ? -1 : result;
-                    this._showUsageInfo();
-                }));
-        
-        Zeitgeist.iface.GetItemsRemote([this._docInfo.uri],
-            Lang.bind(this, function(result, excp) {
-                    this._itemTags = (excp) ? -1 : result[0]['tags'].split(",");
                     this._showUsageInfo();
                 }));
 
@@ -120,15 +122,6 @@ DocDisplayItem.prototype = {
             else
                 this._details.remove_actor(this._usageInfo);
             this.countUsedEver = this._countUsedMonth = null;
-        } else if (this._itemTags != null) {
-            if (this._itemTags != -1)
-                for(let i = 0; i < this._itemTags.length; i++)
-                    this._detailsTags.add_actor(new ItemTag.ItemTag(this._detailsTags,
-                                                                    this._itemTags[i],
-                                                                    this._docInfo.uri).actor);
-            else
-                this._textDetails.remove_actor(this._detailsTags);
-            this._itemTags = null;
         }
     },
 
