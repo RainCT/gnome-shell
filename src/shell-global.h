@@ -48,8 +48,6 @@ MetaScreen *shell_global_get_screen (ShellGlobal  *global);
 
 void shell_global_grab_dbus_service (ShellGlobal *global);
 
-void shell_global_start_task_panel (ShellGlobal *global);
-
 typedef enum {
   SHELL_STAGE_INPUT_MODE_NONREACTIVE,
   SHELL_STAGE_INPUT_MODE_NORMAL,
@@ -71,27 +69,11 @@ void     shell_global_ungrab_keyboard (ShellGlobal *global);
 
 void shell_global_reexec_self (ShellGlobal *global);
 
-ClutterCairoTexture *shell_global_create_vertical_gradient (ClutterColor *top,
-							    ClutterColor *bottom);
-
-ClutterCairoTexture *shell_global_create_horizontal_gradient (ClutterColor *left,
-							      ClutterColor *right);
-
 void shell_global_format_time_relative_pretty (ShellGlobal *global, guint delta, char **text, guint *update_time);
 
 ClutterActor *shell_global_create_root_pixmap_actor (ShellGlobal *global);
 
 guint shell_global_get_max_word_width (ShellGlobal *global, ClutterActor *ref, const char *text, const char *font);
-
-void shell_global_clutter_cairo_texture_draw_clock (ClutterCairoTexture *texture,
-						    int                  hour,
-						    int                  minute);
-
-void shell_global_clutter_cairo_texture_draw_glow (ClutterCairoTexture *texture,
-                                                   double red,
-                                                   double blue,
-                                                   double green,
-                                                   double alpha);
 
 G_END_DECLS
 

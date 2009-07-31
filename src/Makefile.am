@@ -23,7 +23,6 @@ include Makefile-tidy.am
 include Makefile-big.am
 include Makefile-gdmuser.am
 include Makefile-tray.am
-include Makefile-taskpanel.am
 
 gnome_shell_cflags =				\
 	$(MUTTER_PLUGIN_CFLAGS)			\
@@ -58,6 +57,8 @@ libgnome_shell_la_SOURCES =			\
 	shell-app-system.h			\
 	shell-arrow.c			\
 	shell-arrow.h			\
+	shell-drawing.c            \
+	shell-drawing.h            \
 	shell-drawing-area.c			\
 	shell-drawing-area.h			\
 	shell-embedded-window.c			\
