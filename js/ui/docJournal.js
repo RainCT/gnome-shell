@@ -85,31 +85,21 @@ DocJournal.prototype = {
         this._rowLeft = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
                                       reactive: true });
         this.actor.append(this._rowLeft, Big.BoxPackFlags.EXPAND);
-        this._rowMiddle = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
-                                        reactive: true });
-        this.actor.append(this._rowMiddle, Big.BoxPackFlags.EXPAND);
         this._rowRight = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
-                                       reactive: true });
+                                        reactive: true });
         this.actor.append(this._rowRight, Big.BoxPackFlags.EXPAND);
 
         this._textLeft = new Clutter.Text({ color: DASH_TEXT_COLOR,
                                             font_name: "Sans Bold 14px",
-                                            text: "Two days ago" });
+                                            text: "Yesterday" });
         this._rowLeft.append(this._textLeft, Big.BoxPackFlags.EXPAND);
-        this._textMiddle = new Clutter.Text({ color: DASH_TEXT_COLOR,
-                                              font_name: "Sans Bold 14px",
-                                              text: "Yesterday" });
-        this._rowMiddle.append(this._textMiddle, Big.BoxPackFlags.EXPAND);
         this._textRight = new Clutter.Text({ color: DASH_TEXT_COLOR,
-                                             font_name: "Sans Bold 14px",
-                                             text: "Today" });
+                                              font_name: "Sans Bold 14px",
+                                              text: "Today" });
         this._rowRight.append(this._textRight, Big.BoxPackFlags.EXPAND);
 
         this._docsLeft = new DocJournalDay(250, DocDisplay.DocDisplay, "");
         this._rowLeft.append(this._docsLeft.actor, Big.BoxPackFlags.EXPAND);
-
-        this._docsMiddle = new DocJournalDay(250, DocDisplay.DocDisplay, "");
-        this._rowMiddle.append(this._docsMiddle.actor, Big.BoxPackFlags.EXPAND);
 
         this._docsRight = new DocJournalDay(250, DocDisplay.DocDisplay, "");
         this._rowRight.append(this._docsRight.actor, Big.BoxPackFlags.EXPAND);
