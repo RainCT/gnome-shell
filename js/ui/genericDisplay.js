@@ -46,6 +46,8 @@ const PREVIEW_BOX_CORNER_RADIUS = 10;
 const PREVIEW_PLACING = 3/4;
 const PREVIEW_DETAILS_MIN_WIDTH = PREVIEW_ICON_SIZE * 2;
 
+const DISPLAYCONTROL_ITEMS_SPACING = 12;
+
 const INFORMATION_BUTTON_SIZE = 16;
 
 /* This is a virtual class that represents a single display item containing
@@ -351,10 +353,10 @@ GenericDisplay.prototype = {
                                               item_height: ITEM_DISPLAY_HEIGHT });
 
         this._list.connect('notify::n-pages', Lang.bind(this, function (grid, alloc) {
-            this._updateDisplayControl(true);
+            this._updateDisplayControl();
         }));
         this._list.connect('notify::page', Lang.bind(this, function (grid, alloc) {
-            this._updateDisplayControl(false);
+            this._updateDisplayControl();
         }));
 
         // map<itemId, Object> where Object represents the item info
@@ -370,7 +372,7 @@ GenericDisplay.prototype = {
         // See also getNavigationArea.
         this.actor = this._list;
         this.displayControl = new Big.Box({ background_color: ITEM_DISPLAY_BACKGROUND_COLOR,
-                                            spacing: 12,
+                                            spacing: DISPLAYCONTROL_ITEMS_SPACING,
                                             orientation: Big.BoxOrientation.HORIZONTAL});
 
         this._availableWidthForItemDetails = width;
@@ -487,13 +489,8 @@ GenericDisplay.prototype = {
     /*
      * Displays items that match the current request and should show up on the current page.
      * Updates the display control to reflect the matched items set and the page selected.
-     *
-     * resetDisplayControl - indicates if the display control should be re-created because 
-     *                       the results or the space allocated for them changed. If it's false,
-     *                       the existing display control is used and only the page links are
-     *                       updated to reflect the current page selection.
      */
-    _displayMatchedItems: function(resetDisplayControl) {
+    _displayMatchedItems: function() {
         // When generating a new list to display, we first remove all the old
         // displayed items which will unset the selection. So we need 
         // to keep a flag which indicates if this display had the selection.
@@ -712,48 +709,59 @@ GenericDisplay.prototype = {
     },
 
     /*
-     * Updates the display control to reflect the matched items set and the page selected.
-     *
-     * resetDisplayControl - indicates if the display control should be re-created because 
-     *                       the results or the space allocated for them changed. If it's false,
-     *                       the existing display control is used and only the page links are
-     *                       updated to reflect the current page selection.
+     * Adds a link to displayControl. This is used by _updateDisplayControl
+     * to avoid duplicating the code.
      */
-    _updateDisplayControl: function(resetDisplayControl) {
-        if (resetDisplayControl) {
-            this._selectedIndex = -1;
-            this.displayControl.remove_all();
-            let nPages = this._list.n_pages;
-            let pageNumber = this._list.page;
-            for (let i = 0; i < nPages; i++) {
-                let pageControl = new Link.Link({ color: (i == pageNumber) ? DISPLAY_CONTROL_SELECTED_COLOR : ITEM_DISPLAY_DESCRIPTION_COLOR,
-                                                  font_name: "Sans Bold 16px",
-                                                  text: (i+1) + "",
-                                                  height: LABEL_HEIGHT,
-                                                  reactive: (i == pageNumber) ? false : true});
-                this.displayControl.append(pageControl.actor, Big.BoxPackFlags.NONE);
+    _addPageControlLink: function(text, pageNumber, active) {
+        let pageControl = new Link.Link({ color: (active) ? DISPLAY_CONTROL_SELECTED_COLOR : ITEM_DISPLAY_DESCRIPTION_COLOR,
+                                          font_name: "Sans Bold 16px",
+                                          text: text,
+                                          height: LABEL_HEIGHT,
+                                          reactive: (active) ? false : true});
+        this.displayControl.append(pageControl.actor, Big.BoxPackFlags.NONE);
 
-                // we use pageNumberLocalScope to get the page number right in the callback function
-                let pageNumberLocalScope = i;
-                pageControl.connect('clicked',
-                                    Lang.bind(this,
-                                              function(o, event) {
-                                                  this._displayPage(pageNumberLocalScope);
-                                              }));
-            }
-        } else {
-            let pageControlActors = this.displayControl.get_children();
-            for (let i = 0; i < pageControlActors.length; i++) {
-                let pageControlActor = pageControlActors[i];
-                if (i == this._list.page) {
-                    pageControlActor.color =  DISPLAY_CONTROL_SELECTED_COLOR;
-                    pageControlActor.reactive = false;
-                } else {
-                    pageControlActor.color =  ITEM_DISPLAY_DESCRIPTION_COLOR;
-                    pageControlActor.reactive = true;
-                }
-            } 
+        pageControl.connect('clicked',
+                            Lang.bind(this,
+                                      function(o, event) {
+                                          this._displayPage(pageNumber);
+                                      }));
+    },
+
+    /*
+     * Updates the display control to reflect the matched items set and the page selected.
+     */
+    _updateDisplayControl: function() {
+        this._selectedIndex = -1;
+        this.displayControl.remove_all();
+        let nPages = this._list.n_pages;
+        let pageNumber = this._list.page;
+        let global = Shell.Global.get();
+        let wordWidth = global.get_max_word_width(this.displayControl,
+                                                  (nPages + 1) + "",
+                                                  "Sans Bold 16px");
+        let extraWidth = global.get_max_word_width(this.displayControl,
+                                                  "<<>>",
+                                                  "Sans Bold 16px");
+        let availableWidth = this._width - extraWidth - DISPLAYCONTROL_ITEMS_SPACING * 3;
+        let amountOfLinks = Math.floor(availableWidth / (wordWidth + DISPLAYCONTROL_ITEMS_SPACING));
+        let start = Math.max(0, pageNumber - Math.floor(amountOfLinks / 2));
+        let end = Math.min(nPages, start + amountOfLinks + 1);
+
+        if (start > 1)
+            this._addPageControlLink("<<", 0, false);
+        else
+            start = 0;
+
+        let showJumpToEnd = (end < nPages - 1)
+        if (!showJumpToEnd)
+            end = nPages
+
+        for (let i = start; i < end; i++) {
+            this._addPageControlLink((i+1) + "", i, (i == pageNumber));
         }
+
+        if (showJumpToEnd)
+            this._addPageControlLink(">>", nPages-1, false);
     },
 
     // Returns a display item based on its index in the ordering of the
