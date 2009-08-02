@@ -206,7 +206,7 @@ ItemResults.prototype = {
         this.actor.append(this.resultsContainer, Big.BoxPackFlags.EXPAND);
         this.actor.append(this.controlBox, Big.BoxPackFlags.END);
     }
-}
+};
 
 function Dash() {
     this._init();
