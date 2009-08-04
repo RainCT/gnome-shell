@@ -93,7 +93,7 @@ DocDisplayItem.prototype = {
             for(let i = 0; i < this._docInfo.tags.length; i++)
                 this._detailsTags.add_actor(new ItemTag.ItemTag(this._detailsTags,
                                                                 this._docInfo.tags[i],
-                                                                this._docInfo.uri).actor);
+                                                                this._docInfo).actor);
         else
             this._textDetails.remove_actor(this._detailsTags);
 

@@ -23,16 +23,16 @@ DocInfo.prototype = {
             this.timestamp = item["timestamp"];
             this.uri = item["uri"];
             this.name = item["text"];
-            //this.source = item["source"];
-            //this.content = item["content"];
+            this.source = item["source"];
+            this.content = item["content"];
             this.mimeType = item["mimetype"];
             this.tags = item["tags"].split(",");
-            //this.comment = item["comment"];
+            this.comment = item["comment"];
             this.bookmark = item["bookmark"];
-            //this.usage = item["usage"];
-            this.icon = item["icon"];
+            this.use = item["use"];
+            this._iconOverride = item["icon"];
             this.app = item["app"];      // !!!!!!!!!!!!!!!!!!!!!!!!
-            //this.origin = item["origin"];
+            this.origin = item["origin"];
         } else {
             // Item from GtkRecentlyUsed
             this._recentInfo = item;

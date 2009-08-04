@@ -6,6 +6,7 @@ const Signals = imports.signals;
 const Shell = imports.gi.Shell;
 
 const Button = imports.ui.button;
+const Zeitgeist = imports.misc.zeitgeist;
 
 const TAG_DISPLAY_NAME_COLOR = new Clutter.Color();
 TAG_DISPLAY_NAME_COLOR.from_pixel(0xffffffff);
@@ -25,12 +26,12 @@ function ItemTag(parent, tag, uri) {
 }
 
 ItemTag.prototype = {
-    _init: function(parent, tag, uri) {
+    _init: function(parent, tag, docInfo) {
         let global = Shell.Global.get();
 
         this._parent = parent;
         this._tag = tag;
-        this._uri = uri;
+        this._docInfo = docInfo;
 
         this.actor = new Big.Box({ reactive: true,
                                    background_color: TAG_DISPLAY_BACKGROUND_COLOR,
@@ -56,16 +57,14 @@ ItemTag.prototype = {
         this._deleteButton.actor.connect('button-release-event',
                                          Lang.bind(this,
                                                    function() {
-                                                       // FIXME: Delete the tag from Zeitgeist
                                                        this._parent.remove_actor(this.actor);
+                                                       this._docInfo.tags.splice(this._docInfo.tags.indexOf(this._tag), 1);
+                                                       let item = Zeitgeist.docInfoToZeitgeist(this._docInfo);
+                                                       Zeitgeist.iface.UpdateItemsRemote([ item ], function(result, excp) { });
+                                                       this.actor.destroy();
                                                        return true;
                                                     }));
         this.actor.append(this._deleteButton.actor, Big.BoxPackFlags.EXPAND);
-    },
-
-    // Destroys the item.
-    destroy: function() {
-      this.actor.destroy();
     }
 };
 

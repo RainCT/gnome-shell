@@ -12,13 +12,16 @@ var zeitgeistIface = {
     name: 'org.gnome.zeitgeist',
     methods: [{ name: 'FindEvents',
                 inSignature: 'iiibsaa{sv}',
-                outSignature: 'a(isssssssbssss)' },
+                outSignature: 'aa{sv}' },
               { name: 'GetItems',
                 inSignature: 'as',
-                outSignature: 'a(isssssssbssss)' },
+                outSignature: 'aa{sv}' },
               { name: 'CountEvents',
                 inSignature: 'iisaa{sv}',
                 outSignature: 'i' },
+              { name: 'UpdateItems',
+                inSignature: 'aa{sv}',
+                outSignature: '' },
              ],
     signals: [{ name: 'EventsChanged',
                 inSignature: '' },
@@ -42,6 +45,24 @@ Zeitgeist.prototype = {
 
 DBus.proxifyPrototype(Zeitgeist.prototype, zeitgeistIface);
 let iface = new Zeitgeist();
+
+function docInfoToZeitgeist(docInfo) {
+    return {
+        timestamp: docInfo.timestamp,
+        uri: docInfo.uri,
+        text: docInfo.name,
+        source: docInfo.source,
+        content: docInfo.content,
+        mimetype: docInfo.mimeType,
+        tags: docInfo.tags.join(','),
+        comment: docInfo.comment,
+        bookmark: docInfo.bookmark,
+        use: docInfo.use,
+        icon: docInfo._iconOverride,
+        app: docInfo.app,
+        origin: docInfo.origin
+    };
+}
 
 function RecentDocsWatcher() {
     this._init();
