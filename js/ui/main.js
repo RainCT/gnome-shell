@@ -13,6 +13,7 @@ const Chrome = imports.ui.chrome;
 const Overlay = imports.ui.overlay;
 const Panel = imports.ui.panel;
 const RunDialog = imports.ui.runDialog;
+const LookingGlass = imports.ui.lookingGlass;
 const Sidebar = imports.ui.sidebar;
 const Tweener = imports.ui.tweener;
 const WindowManager = imports.ui.windowManager;
@@ -25,6 +26,7 @@ let panel = null;
 let sidebar = null;
 let overlay = null;
 let runDialog = null;
+let lookingGlass = null;
 let wm = null;
 let recorder = null;
 let inModal = false;
@@ -51,17 +53,10 @@ function start() {
 
     global.connect('panel-run-dialog', function(panel) {
         // Make sure not more than one run dialog is shown.
-        if (!runDialog) {
+        if (runDialog == null) {
             runDialog = new RunDialog.RunDialog();
-            let endHandler = function() {
-                runDialog.destroy();
-                runDialog = null;
-            };
-            runDialog.connect('run', endHandler);
-            runDialog.connect('cancel', endHandler);
-            if (!runDialog.show())
-                endHandler();
         }
+        runDialog.open();
     });
 
     overlay = new Overlay.Overlay();
@@ -147,6 +142,14 @@ function endModal() {
     global.ungrab_keyboard();
     global.set_stage_input_mode(Shell.StageInputMode.NORMAL);
     inModal = false;
+}
+
+function createLookingGlass() {
+    if (lookingGlass == null) {
+        lookingGlass = new LookingGlass.LookingGlass();
+        lookingGlass.slaveTo(panel.actor);
+    }
+    return lookingGlass;
 }
 
 function createAppLaunchContext() {
