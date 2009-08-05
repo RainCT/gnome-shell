@@ -611,10 +611,7 @@ GenericDisplay.prototype = {
      */
     _redisplay: function(resetPage) {
         this._refreshCache();
-        if (!this._filterActive())
-            this._setDefaultList();
-        else
-            this._doSearchFilter();
+        this._doSearchFilter();
 
         if (resetPage)
             this._list.page = 0;
@@ -628,12 +625,6 @@ GenericDisplay.prototype = {
  
     // Performs the steps needed to have the latest information about the items.
     _refreshCache: function() {
-        throw new Error("Not implemented");
-    },
-
-    // Sets the list of the displayed items based on the default sorting order.
-    // The default sorting order is specific to each implementing class.
-    _setDefaultList: function() {
         throw new Error("Not implemented");
     },
 

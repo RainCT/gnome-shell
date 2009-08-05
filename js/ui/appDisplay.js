@@ -86,13 +86,13 @@ AppDisplayItem.prototype = {
                                              font_name: "Sans bold 14px",
                                              line_wrap: true,
                                              text: "Related documents" });
-        this._details.append(recentTitle, Big.BoxPackFlags.EXPAND);
+        this._details.append(recentTitle, Big.BoxPackFlags.NONE);
 
         this._recentItems = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                                     font_name: "Sans 14px",
                                                     line_wrap: true,
                                                     text: "Loading..." });
-        this._details.append(this._recentItems, Big.BoxPackFlags.EXPAND);
+        this._details.append(this._recentItems, Big.BoxPackFlags.NONE);
 
         this._uris_in_list = [];
         this._mostUsedDocs = this._recentlyUsedDocs = null;
@@ -119,8 +119,7 @@ AppDisplayItem.prototype = {
     },
 
     _detailsActorAddDocumentList: function(docs) {
-        let list = new Shell.OverflowList({ width: this._availableWidth,
-                                            spacing: 6.0,
+        let list = new Shell.OverflowList({ spacing: 6.0,
                                             item_height: GenericDisplay.ITEM_DISPLAY_HEIGHT });
         let i, item, displayItem;
         let numItemsBefore = this._uris_in_list.length;
@@ -129,8 +128,7 @@ AppDisplayItem.prototype = {
             if (this._uris_in_list.indexOf(item.uri) >= 0 || !item.exists())
                 continue;
             displayItem = new DocDisplay.DocDisplayItem(item,
-                                                        new Date().getTime() / 1000,
-                                                        this._availableWidth);
+                                                        new Date().getTime() / 1000);
             list.add_actor(displayItem.actor);
             this._uris_in_list.push(item.uri);
         }
@@ -139,8 +137,8 @@ AppDisplayItem.prototype = {
             return
         if (numItemsBefore)
             this._details.append(new Clutter.Rectangle({ color: SEPARATOR_COLOR, height: 1 }),
-                                 Big.BoxPackFlags.EXPAND);
-        this._details.append(list, Big.BoxPackFlags.EXPAND);
+                                 Big.BoxPackFlags.NONE);
+        this._details.append(list, Big.BoxPackFlags.NONE);
     },
 
     _detailsActorShowRelatedItems: function() {
@@ -429,11 +427,6 @@ AppDisplay.prototype = {
         }
 
         this._appsStale = false;
-    },
-
-    // Stub this out; the app display always has a category selected
-    _setDefaultList : function() {
-        this._matchedItems = [];
     },
 
     // Compares items associated with the item ids based on the alphabetical order

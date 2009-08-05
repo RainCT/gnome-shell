@@ -87,7 +87,7 @@ DocDisplayItem.prototype = {
                                              line_wrap: true,
                                              text: "Retrieving usage information..." });
         this._countUsedEver = this._countUsedMonth = this._itemTags = null;
-        this._details.append(this._usageInfo, Big.BoxPackFlags.EXPAND);
+        this._details.append(this._usageInfo, Big.BoxPackFlags.NONE);
 
         if (this._docInfo._recentInfo)
             this._textDetails.remove_actor(this._detailsTags);
@@ -158,7 +158,6 @@ DocDisplay.prototype = {
 
     _init : function() {
         GenericDisplay.GenericDisplay.prototype._init.call(this);
-        let me = this;
 
         // We keep a single timeout callback for updating last visited times
         // for all the items in the display. This avoids creating individual
@@ -181,40 +180,12 @@ DocDisplay.prototype = {
 
     // Gets the list of recent items from the recent items manager.
     _refreshCache : function(items) {
-        this._allItems = items;
-    },
-
-    // Sets the list of the displayed items based on how recently they were last visited.
-    _setDefaultList : function() {
-        // It seems to be an implementation detail of the Mozilla JavaScript that object
-        // properties are returned during the iteration in the same order in which they were
-        // defined, but it is not a guarantee according to this 
-        // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Statements/for...in
-        // While this._allItems associative array seems to always be ordered by last added,
-        // as the results of this._recentManager.get_items() based on which it is constructed are,
-        // we should do the sorting manually because we want the order to be based on last visited.
-        //
-        // This function is called each time the search string is set back to '' or we display
-        // the overlay, so we are doing the sorting over the same items multiple times if the list
-        // of recent items didn't change. We could store an additional array of doc ids and sort
-        // them once when they are returned by this._recentManager.get_items() to avoid having to do 
-        // this sorting each time, but the sorting seems to be very fast anyway, so there is no need
-        // to introduce an additional class variable.
-        this._matchedItems = [];
-        let docIdsToRemove = [];
-        for (docId in this._allItems) {
-            // this._allItems[docId].exists() checks if the resource still exists
-            if (this._allItems[docId].exists()) 
-                this._matchedItems.push(docId);
-            else 
-                docIdsToRemove.push(docId);
+        if (items) {
+            this._allItems = {};
+            for (let i = 0; i < items.length; i++)
+                this._allItems[i] = items[i];
+            this._redisplay(false);
         }
-
-        for (docId in docIdsToRemove) {
-            delete this._allItems[docId];
-        }
-
-        this._matchedItems.sort(Lang.bind(this, function (a,b) { return this._compareItems(a,b); }));
     },
 
     // Compares items associated with the item ids based on how recently the items
