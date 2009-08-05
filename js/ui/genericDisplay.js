@@ -96,7 +96,7 @@ GenericDisplayItem.prototype = {
                                                                       infoIconUri,
                                                                       LITTLE_BUTTON_SIZE,
                                                                       LITTLE_BUTTON_SIZE);
-        this._informationButton = new Button.iconButton(this.actor, INFORMATION_BUTTON_SIZE, infoIcon);
+        this._informationButton = new Button.iconButton(this.actor, LITTLE_BUTTON_SIZE, infoIcon);
         let buttonBox = new Big.Box({ width: LITTLE_BUTTON_SIZE + 2 * DEFAULT_PADDING,
                                       height: LITTLE_BUTTON_SIZE,
                                       padding_left: DEFAULT_PADDING, padding_right: DEFAULT_PADDING,

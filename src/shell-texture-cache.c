@@ -993,7 +993,7 @@ icon_for_recent (GtkRecentInfo *info)
       return g_themed_icon_new (GTK_STOCK_FILE);
     }
 
-  return icon_for_mimetype(mimetype);
+  return icon_for_mimetype (mimetype);
 }
 
 /**
