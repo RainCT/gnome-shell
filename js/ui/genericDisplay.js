@@ -48,7 +48,7 @@ const PREVIEW_DETAILS_MIN_WIDTH = PREVIEW_ICON_SIZE * 2;
 
 const DISPLAYCONTROL_ITEMS_SPACING = 12;
 
-const INFORMATION_BUTTON_SIZE = 16;
+const LITTLE_BUTTON_SIZE = 16;
 
 /* This is a virtual class that represents a single display item containing
  * a name, a description, and an icon. It allows selecting an item and represents 
@@ -89,11 +89,11 @@ GenericDisplayItem.prototype = {
         let infoIconUri = "file://" + global.imagedir + "info.svg";
         let infoIcon = Shell.TextureCache.get_default().load_uri_sync(Shell.TextureCachePolicy.FOREVER,
                                                                       infoIconUri,
-                                                                      INFORMATION_BUTTON_SIZE,
-                                                                      INFORMATION_BUTTON_SIZE);
-        this._informationButton = new Button.iconButton(this.actor, INFORMATION_BUTTON_SIZE, infoIcon);
-        this._informationButton.actor.x = availableWidth - ITEM_DISPLAY_PADDING_RIGHT - INFORMATION_BUTTON_SIZE;
-        this._informationButton.actor.y = ITEM_DISPLAY_HEIGHT / 2 - INFORMATION_BUTTON_SIZE / 2;
+                                                                      LITTLE_BUTTON_SIZE,
+                                                                      LITTLE_BUTTON_SIZE);
+        this._informationButton = new Button.iconButton(this.actor, LITTLE_BUTTON_SIZE, infoIcon);
+        this._informationButton.actor.x = availableWidth - ITEM_DISPLAY_PADDING_RIGHT - LITTLE_BUTTON_SIZE;
+        this._informationButton.actor.y = ITEM_DISPLAY_HEIGHT / 2 - LITTLE_BUTTON_SIZE / 2;
 
         // Connecting to the button-press-event for the information button ensures that the actor, 
         // which is a draggable actor, does not get the button-press-event and doesn't initiate
@@ -280,7 +280,7 @@ GenericDisplayItem.prototype = {
         this._icon = this._createIcon();
         this.actor.add_actor(this._icon);
 
-        let textWidth = this._availableWidth - (ITEM_DISPLAY_ICON_SIZE + 4) - INFORMATION_BUTTON_SIZE - ITEM_DISPLAY_PADDING_RIGHT;
+        let textWidth = this._availableWidth - (ITEM_DISPLAY_ICON_SIZE + 4) - LITTLE_BUTTON_SIZE - ITEM_DISPLAY_PADDING_RIGHT;
         this._name = new Clutter.Text({ color: ITEM_DISPLAY_NAME_COLOR,
                                         font_name: "Sans 14px",
                                         width: textWidth,

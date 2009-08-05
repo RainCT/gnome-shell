@@ -33,6 +33,7 @@ var commandHeader = "const Clutter = imports.gi.Clutter; " +
                     "const Main = imports.ui.main; " +
                     "const Lang = imports.lang; " +
                     "const Tweener = imports.ui.tweener; " +
+                    "const Zeitgeist = imports.ui.zeitgeist;" +
                     /* Utility functions...we should probably be able to use these
                      * in the shell core code too. */
                     "const global = Shell.Global.get(); " +

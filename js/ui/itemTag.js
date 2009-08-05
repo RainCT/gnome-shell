@@ -7,6 +7,7 @@ const Shell = imports.gi.Shell;
 
 const Button = imports.ui.button;
 const Zeitgeist = imports.misc.zeitgeist;
+const GenericDisplay = imports.ui.genericDisplay;
 
 const TAG_DISPLAY_NAME_COLOR = new Clutter.Color();
 TAG_DISPLAY_NAME_COLOR.from_pixel(0xffffffff);
@@ -14,9 +15,6 @@ const TAG_DISPLAY_BACKGROUND_COLOR = new Clutter.Color();
 TAG_DISPLAY_BACKGROUND_COLOR.from_pixel(0x3d5229ff);
 
 const TAG_DISPLAY_HEIGHT = 23;
-
-// FIXME: Rename this to something generic and import it from genericDisplay.js?
-const INFORMATION_BUTTON_SIZE = 16;
 
 /* This is a class that represents a tag. It creates an actor displaying the
  * label inside a box, plus a button to delete the tag.
@@ -51,9 +49,9 @@ ItemTag.prototype = {
         let deleteIconUri = "file://" + global.imagedir + "delete.svg";
         let deleteIcon = Shell.TextureCache.get_default().load_uri_sync(Shell.TextureCachePolicy.FOREVER,
                                                                       deleteIconUri,
-                                                                      INFORMATION_BUTTON_SIZE,
-                                                                      INFORMATION_BUTTON_SIZE);
-        this._deleteButton = new Button.iconButton(this.actor, INFORMATION_BUTTON_SIZE, deleteIcon);
+                                                                      GenericDisplay.LITTLE_BUTTON_SIZE,
+                                                                      GenericDisplay.LITTLE_BUTTON_SIZE);
+        this._deleteButton = new Button.iconButton(this.actor, GenericDisplay.LITTLE_BUTTON_SIZE, deleteIcon);
         this._deleteButton.actor.connect('button-release-event',
                                          Lang.bind(this,
                                                    function() {

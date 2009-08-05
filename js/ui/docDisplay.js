@@ -82,6 +82,7 @@ DocDisplayItem.prototype = {
 
     _createCustomDetailsActor: function() {
         // Add information from Zeitgeist
+        let global = Shell.Global.get();
         this._usageInfo = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                              font_name: "Sans 14px",
                                              line_wrap: true,
@@ -89,13 +90,22 @@ DocDisplayItem.prototype = {
         this._countUsedEver = this._countUsedMonth = this._itemTags = null;
         this._details.append(this._usageInfo, Big.BoxPackFlags.EXPAND);
 
-        if (this._docInfo.tags)
-            for(let i = 0; i < this._docInfo.tags.length; i++)
+        if (this._docInfo._recentInfo)
+            this._textDetails.remove_actor(this._detailsTags);
+        else {
+            for(let i = 0; i < this._docInfo.tags.length && this._docInfo.tags[i]; i++)
                 this._detailsTags.add_actor(new ItemTag.ItemTag(this._detailsTags,
                                                                 this._docInfo.tags[i],
                                                                 this._docInfo).actor);
-        else
-            this._textDetails.remove_actor(this._detailsTags);
+            this._addTagButton = new Clutter.Texture({ width: ItemTag.TAG_DISPLAY_HEIGHT,
+                                                       height: ItemTag.TAG_DISPLAY_HEIGHT,
+                                                       reactive: true });
+            this._addTagButton.set_from_file(global.imagedir + "add-workspace.svg");
+            this._addTagButton.connect("button-release-event", Lang.bind(this, function(docInfo) {
+                                                                   log('----------> NEW TAG FOR ' + this._docInfo.uri);
+                                                               }));
+            this._detailsTags.add_actor(this._addTagButton);
+        }
 
         // FIXME: Ensure the URI is escaped properly (so that it contains no wildcards)
         Zeitgeist.iface.CountEventsRemote(0, 0, 'event', [{ uri: this._docInfo.uri}],
