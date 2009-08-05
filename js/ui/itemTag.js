@@ -16,9 +16,25 @@ TAG_DISPLAY_BACKGROUND_COLOR.from_pixel(0x3d5229ff);
 
 const TAG_DISPLAY_HEIGHT = 23;
 
-/* This is a class that represents a tag. It creates an actor displaying the
- * label inside a box, plus a button to delete the tag.
- */
+function createTagLabel(text) {
+    let actor = new Big.Box({ reactive: true,
+                              background_color: TAG_DISPLAY_BACKGROUND_COLOR,
+                              padding: 4,
+                              spacing: 4,
+                              height: TAG_DISPLAY_HEIGHT,
+                              orientation: Big.BoxOrientation.HORIZONTAL });
+
+    let label = new Clutter.Text({ color: TAG_DISPLAY_NAME_COLOR,
+                                   font_name: "Sans 14px",
+                                   line_wrap: true,
+                                   ellipsize: Pango.EllipsizeMode.END,
+                                   text: text });
+    actor.append(label, Big.BoxPackFlags.EXPAND);
+
+    return [actor, label];
+}
+
+/* This is a class that represents a tag. */
 function ItemTag(parent, tag, uri) {
     this._init(parent, tag, uri);
 }
@@ -31,20 +47,7 @@ ItemTag.prototype = {
         this._tag = tag;
         this._docInfo = docInfo;
 
-        this.actor = new Big.Box({ reactive: true,
-                                   background_color: TAG_DISPLAY_BACKGROUND_COLOR,
-                                   //corner_radius: 4,
-                                   padding: 4,
-                                   spacing: 4,
-                                   height: TAG_DISPLAY_HEIGHT,
-                                   orientation: Big.BoxOrientation.HORIZONTAL });
-
-        let label = new Clutter.Text({ color: TAG_DISPLAY_NAME_COLOR,
-                                   font_name: "Sans 14px",
-                                   line_wrap: true,
-                                   ellipsize: Pango.EllipsizeMode.END,
-                                   text: tag });
-        this.actor.append(label, Big.BoxPackFlags.EXPAND);
+        this.actor = createTagLabel(tag)[0];
 
         let deleteIconUri = "file://" + global.imagedir + "close.svg";
         let deleteIcon = Shell.TextureCache.get_default().load_uri_sync(Shell.TextureCachePolicy.FOREVER,
