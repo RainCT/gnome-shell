@@ -338,15 +338,15 @@ RecentDocsWidget.prototype = {
 
         this.title = "Recent Documents";
         this.actor = new Big.Box({ spacing: 2 });
-        this.numberOfItems = 5;
+        this._numberOfItems = 5;
         Zeitgeist.recentDocsWatcher.addCallback(Lang.bind(this,
-            this._recentChanged), this.numberOfItems);
+            this._recentChanged), this._numberOfItems);
     },
 
     _recentChanged: function(items) {
         this.clear();
 
-        for (let i = 0; i < Math.min(items.length, this.numberOfItems); i++)
+        for (let i = 0; i < Math.min(items.length, this._numberOfItems); i++)
             this.addItem(items[i]);
     }
 };

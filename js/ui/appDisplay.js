@@ -13,12 +13,12 @@ const Signals = imports.signals;
 const Mainloop = imports.mainloop;
 
 const DND = imports.ui.dnd;
-const GenericDisplay = imports.ui.genericDisplay;
 const DocDisplay = imports.ui.docDisplay;
 const DocInfo = imports.misc.docInfo;
-const Zeitgeist = imports.misc.zeitgeist;
+const GenericDisplay = imports.ui.genericDisplay;
 const Main = imports.ui.main;
 const Workspaces = imports.ui.workspaces;
+const Zeitgeist = imports.misc.zeitgeist;
 
 const ENTERED_MENU_COLOR = new Clutter.Color();
 ENTERED_MENU_COLOR.from_pixel(0x00ff0022);
@@ -41,17 +41,16 @@ const MAX_ITEMS = 30;
 /* This class represents a single display item containing information about an application.
  *
  * appInfo - AppInfo object containing information about the application
- * availableWidth - total width available for the item
  */
-function AppDisplayItem(appInfo, availableWidth) {
-    this._init(appInfo, availableWidth);
+function AppDisplayItem(appInfo) {
+    this._init(appInfo);
 }
 
 AppDisplayItem.prototype = {
     __proto__:  GenericDisplay.GenericDisplayItem.prototype,
 
-    _init : function(appInfo, availableWidth) {
-        GenericDisplay.GenericDisplayItem.prototype._init.call(this, availableWidth);
+    _init : function(appInfo) {
+        GenericDisplay.GenericDisplayItem.prototype._init.call(this);
         this._appInfo = appInfo;
 
         this._setItemInfo(appInfo.get_name(), appInfo.get_description());
@@ -196,7 +195,6 @@ MenuItem.prototype = {
         this.actor.append(this._icon, Big.BoxPackFlags.NONE);
         this._text = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                         font_name: "Sans 14px",
-                                        ellipsize: Pango.EllipsizeMode.END,
                                         text: name });
 
         // We use individual boxes for the label and the arrow to ensure that they
@@ -245,18 +243,16 @@ Signals.addSignalMethods(MenuItem.prototype);
 /* This class represents a display containing a collection of application items.
  * The applications are sorted based on their popularity by default, and based on
  * their name if some search filter is applied.
- *
- * width - width available for the display
  */
-function AppDisplay(width) {
-    this._init(width);
+function AppDisplay() {
+    this._init();
 }
 
 AppDisplay.prototype = {
     __proto__:  GenericDisplay.GenericDisplay.prototype,
 
-    _init : function(width) {
-        GenericDisplay.GenericDisplay.prototype._init.call(this, width);
+    _init : function() {
+        GenericDisplay.GenericDisplay.prototype._init.call(this);
 
         this._menus = [];
         this._menuDisplays = [];
@@ -358,7 +354,8 @@ AppDisplay.prototype = {
     },
 
     _getMostUsed: function() {
-        return this._appMonitor.get_most_used_apps(0, 30).map(Lang.bind(this, function (id) {
+        let context = "";
+        return this._appMonitor.get_most_used_apps(context, 30).map(Lang.bind(this, function (id) {
             return this._appSystem.lookup_app(id + '.desktop');
         })).filter(function (e) { return e != null });
     },
@@ -513,8 +510,8 @@ AppDisplay.prototype = {
     },
 
     // Creates an AppDisplayItem based on itemInfo, which is expected be an Shell.AppInfo object.
-    _createDisplayItem: function(itemInfo, width) {
-        return new AppDisplayItem(itemInfo, width);
+    _createDisplayItem: function(itemInfo) {
+        return new AppDisplayItem(itemInfo);
     }
 };
 
@@ -568,8 +565,6 @@ WellDisplayItem.prototype = {
                                     x_align: Big.BoxAlignment.CENTER });
         this._nameBox = nameBox;
 
-        this._wordWidth = Shell.Global.get().get_max_word_width(this.actor, appInfo.get_name(),
-                                                                "Sans 12px");
         this._name = new Clutter.Text({ color: GenericDisplay.ITEM_DISPLAY_NAME_COLOR,
                                         font_name: "Sans 12px",
                                         line_alignment: Pango.Alignment.CENTER,
@@ -804,6 +799,9 @@ AppWell.prototype = {
     },
 
     _redisplay: function() {
+        /* hardcode here pending some design about how exactly activities behave */
+        let contextId = "";
+
         let arrayToObject = function(a) {
             let o = {};
             for (let i = 0; i < a.length; i++)
@@ -812,7 +810,8 @@ AppWell.prototype = {
         };
         let favoriteIds = this._appSystem.get_favorites();
         let favoriteIdsObject = arrayToObject(favoriteIds);
-        let runningIds = this._appMonitor.get_running_app_ids().filter(function (e) {
+
+        let runningIds = this._appMonitor.get_running_app_ids(contextId).filter(function (e) {
             return !(e in favoriteIdsObject);
         });
         let favorites = this._lookupApps(favoriteIds);

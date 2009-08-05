@@ -6,8 +6,8 @@ const Signals = imports.signals;
 const Shell = imports.gi.Shell;
 
 const Button = imports.ui.button;
-const Zeitgeist = imports.misc.zeitgeist;
 const GenericDisplay = imports.ui.genericDisplay;
+const Zeitgeist = imports.misc.zeitgeist;
 
 const TAG_DISPLAY_NAME_COLOR = new Clutter.Color();
 TAG_DISPLAY_NAME_COLOR.from_pixel(0xffffffff);
@@ -46,7 +46,7 @@ ItemTag.prototype = {
                                    text: tag });
         this.actor.append(label, Big.BoxPackFlags.EXPAND);
 
-        let deleteIconUri = "file://" + global.imagedir + "delete.svg";
+        let deleteIconUri = "file://" + global.imagedir + "close.svg";
         let deleteIcon = Shell.TextureCache.get_default().load_uri_sync(Shell.TextureCachePolicy.FOREVER,
                                                                       deleteIconUri,
                                                                       GenericDisplay.LITTLE_BUTTON_SIZE,
