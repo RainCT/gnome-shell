@@ -1,9 +1,11 @@
-AC_INIT(gnome-shell, 0.0.1)
+AC_INIT(gnome-shell, 0.1)
 
 AC_CONFIG_AUX_DIR(config)
 
 AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip])
 AM_MAINTAINER_MODE
+
+m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])],)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -41,7 +43,7 @@ fi
 
 AM_CONDITIONAL(BUILD_RECORDER, $build_recorder)
 
-PKG_CHECK_MODULES(MUTTER_PLUGIN, gio-unix-2.0 gtk+-2.0 dbus-glib-1 mutter-plugins gjs-gi-1.0 xscrnsaver libgnome-menu $recorder_modules gconf-2.0 gdk-x11-2.0 clutter-x11-1.0 clutter-glx-1.0)
+PKG_CHECK_MODULES(MUTTER_PLUGIN, gio-unix-2.0 gtk+-2.0 dbus-glib-1 mutter-plugins gjs-gi-1.0 libgnome-menu $recorder_modules gconf-2.0 gdk-x11-2.0 clutter-x11-1.0 clutter-glx-1.0)
 PKG_CHECK_MODULES(TIDY, clutter-1.0)
 PKG_CHECK_MODULES(BIG, clutter-1.0 gtk+-2.0 librsvg-2.0)
 PKG_CHECK_MODULES(GDMUSER, dbus-glib-1 gtk+-2.0)
@@ -80,17 +82,31 @@ AC_SUBST(GIRDIR)
 TYPELIBDIR="$($PKG_CONFIG --variable=typelibdir gobject-introspection-1.0)"
 AC_SUBST(TYPELIBDIR)
 
-changequote(,)dnl
-if test "x$GCC" = "xyes"; then
-  case " $CFLAGS " in
-  *[\ \	]-Wall[\ \	]*) ;;
-  *) CFLAGS="$CFLAGS -Wall" ;;
-  esac
+# Stay command-line compatible with the gnome-common configure option. Here
+# minimum/yes/maximum are the same, however.
+AC_ARG_ENABLE(compile_warnings,
+  AC_HELP_STRING([--enable-compile-warnings=@<:@no/minimum/yes/maximum/error@:>@],
+                 [Turn on compiler warnings]),,
+  enable_compile_warnings=error)
 
-  case " $OBJCFLAGS " in
-  *[\ \	]-Wall[\ \	]*) ;;
-  *) OBJCFLAGS="$OBJCFLAGS -Wall" ;;
-  esac
+changequote(,)dnl
+if test "$enable_compile_warnings" != no ; then
+  if test "x$GCC" = "xyes"; then
+    case " $CFLAGS " in
+    *[\ \	]-Wall[\ \	]*) ;;
+    *) CFLAGS="$CFLAGS -Wall" ;;
+    esac
+    case " $CFLAGS " in
+    *[\ \	]-Wmissing-prototypes[\ \	]*) ;;
+    *) CFLAGS="$CFLAGS -Wmissing-prototypes" ;;
+    esac
+    if test "$enable_compile_warnings" = error ; then
+      case " $CFLAGS " in
+      *[\ \	]-Werror[\ \	]*) ;;
+      *) CFLAGS="$CFLAGS -Werror" ;;
+      esac
+    fi
+  fi
 fi
 changequote([,])dnl
 
