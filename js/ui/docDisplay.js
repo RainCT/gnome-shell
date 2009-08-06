@@ -107,7 +107,7 @@ DocDisplayItem.prototype = {
                                                                    this._newTagLabel.editable = true;
                                                                    this._newTagLabel.activatable = true;
                                                                    this._newTagLabel.singleLineMode = true;
-                                                                   this._newTagLabel.width = 150;
+                                                                   this._newTagLabel.min_width = 70;
                                                                    this._detailsTags.add_actor(this._newTagActor);
                                                                    this._newTagLabel.connect('activate', Lang.bind(this, function (o, e) {
                                                                        let global = Shell.Global.get();
