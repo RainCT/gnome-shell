@@ -208,8 +208,12 @@ DocDisplay.prototype = {
         if (search == null || search == '')
             return true;
 
+        for (let i = 0; i < itemInfo.tags.length; i++)
+            if (itemInfo.tags[i].toLowerCase().search(search) >= 0)
+                return true;
+
         let name = itemInfo.name.toLowerCase();
-        if (name.indexOf(search) >= 0)
+        if (name.indexOf(search) >= 0 || itemInfo.tags.indexOf(search) >= 0)
             return true;
         // TODO: we can also check doc URIs, so that
         // if you search for a directory name, we display recent files from it
