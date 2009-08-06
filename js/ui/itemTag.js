@@ -73,7 +73,7 @@ NewTag.prototype = {
             this._docInfo.tags.push(text);
             let item = Zeitgeist.docInfoToZeitgeist(this._docInfo);
             Zeitgeist.iface.UpdateItemsRemote([ item ], function(result, excp) { });
-            this._parent.add_actor(new ItemTag(this._detailsTags,
+            this._parent.add_actor(new ItemTag(this._parent,
                                                text,
                                                this._docInfo).actor);
         }
@@ -85,6 +85,7 @@ NewTag.prototype = {
         this._parent.add_actor(this._replacedActor);
         let global = Shell.Global.get();
         global.stage.set_key_focus(this._previousFocus);
+        this.actor.destroy();
     }
 };
 
