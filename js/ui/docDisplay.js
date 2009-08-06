@@ -101,36 +101,7 @@ DocDisplayItem.prototype = {
                                                        reactive: true });
             this._addTagButton.set_from_file(global.imagedir + "add-workspace.svg");
             this._addTagButton.connect("button-release-event", Lang.bind(this, function(docInfo) {
-                                                                   let global = Shell.Global.get();
-                                                                   this._detailsTags.remove_actor(this._addTagButton);
-                                                                   [this._newTagActor, this._newTagLabel] = ItemTag.createTagLabel('');
-                                                                   this._newTagLabel.editable = true;
-                                                                   this._newTagLabel.activatable = true;
-                                                                   this._newTagLabel.singleLineMode = true;
-                                                                   this._newTagLabel.min_width = 70;
-                                                                   this._detailsTags.add_actor(this._newTagActor);
-                                                                   this._newTagLabel.connect('activate', Lang.bind(this, function (o, e) {
-                                                                       let global = Shell.Global.get();
-                                                                       o.editable = false;
-                                                                       let text = o.get_text().replace('\n', ' ').replace(/,/g, ' ');
-                                                                       // Strip leading and trailing whitespace
-                                                                       text = text.replace(/^\s+/g, '').replace(/\s+$/g, '');
-                                                                       if (text != '') {
-                                                                           this._docInfo.tags.push(text);
-                                                                           let item = Zeitgeist.docInfoToZeitgeist(this._docInfo);
-                                                                           Zeitgeist.iface.UpdateItemsRemote([ item ], function(result, excp) { });
-                                                                           this._detailsTags.add_actor(new ItemTag.ItemTag(this._detailsTags,
-                                                                                                       text,
-                                                                                                       this._docInfo).actor);
-                                                                       }
-                                                                       this._detailsTags.remove_actor(this._newTagActor);
-                                                                       this._detailsTags.add_actor(this._addTagButton);
-                                                                       global.stage.set_key_focus(this._previousFocus);
-                                                                       this._newTagActor = this._newTagLabel = null;
-                                                                       return true;
-                                                                   }));
-                                                                   this._previousFocus = global.stage.get_key_focus();
-                                                                   global.stage.set_key_focus(this._newTagLabel);
+                                                                   new ItemTag.NewTag(this._detailsTags, this._docInfo, this._addTagButton);
                                                                }));
             this._detailsTags.add_actor(this._addTagButton);
         }

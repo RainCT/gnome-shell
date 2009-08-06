@@ -34,6 +34,60 @@ function createTagLabel(text) {
     return [actor, label];
 }
 
+function NewTag(parent, docInfo, replace) {
+    this._init(parent, docInfo, replace);
+}
+
+NewTag.prototype = {
+    _init: function(parent, docInfo, replace) {
+        this._parent = parent;
+        this._docInfo = docInfo;
+        this._replacedActor = replace;
+
+        this._parent.remove_actor(this._replacedActor);
+        [this.actor, this._label] = createTagLabel('');
+        this._label.editable = true;
+        this._label.activatable = true;
+        this._label.singleLineMode = true;
+        this._label.min_width = 70;
+        this._parent.add_actor(this.actor);
+
+        let global = Shell.Global.get();
+        this._previousFocus = global.stage.get_key_focus();
+        global.stage.set_key_focus(this._label);
+
+        this._label.connect('activate', Lang.bind(this, this._create_tag));
+        this._label.connect('key-press-event', Lang.bind(this, function(o, e) {
+            let symbol = Shell.get_event_key_symbol(e);
+            if (symbol == Clutter.Escape)
+                this._restore();
+        }));
+    },
+
+    _create_tag: function(o, e) {
+        this._label.editable = false;
+        let text = this._label.get_text().replace('\n', ' ').replace(/,/g, ' ');
+        // Strip leading and trailing whitespace
+        text = text.replace(/^\s+/g, '').replace(/\s+$/g, '');
+        if (text != '') {
+            this._docInfo.tags.push(text);
+            let item = Zeitgeist.docInfoToZeitgeist(this._docInfo);
+            Zeitgeist.iface.UpdateItemsRemote([ item ], function(result, excp) { });
+            this._parent.add_actor(new ItemTag(this._detailsTags,
+                                               text,
+                                               this._docInfo).actor);
+        }
+        this._restore();
+    },
+
+    _restore: function() {
+        this._parent.remove_actor(this.actor);
+        this._parent.add_actor(this._replacedActor);
+        let global = Shell.Global.get();
+        global.stage.set_key_focus(this._previousFocus);
+    }
+};
+
 /* This is a class that represents a tag. */
 function ItemTag(parent, tag, uri) {
     this._init(parent, tag, uri);
