@@ -791,7 +791,7 @@ Workspace.prototype = {
         let gridWidth = Math.ceil(Math.sqrt(numberOfWindows));
         let gridHeight = Math.ceil(numberOfWindows / gridWidth);
 
-        let fraction = Math.sqrt(.6/(gridWidth * gridHeight));
+        let fraction = 0.95 * (1.0 / gridWidth);
 
         let xCenter = (.5 / gridWidth) + ((windowIndex) % gridWidth) / gridWidth;
         let yCenter = (.5 / gridHeight) + Math.floor((windowIndex / gridWidth)) / gridHeight;
