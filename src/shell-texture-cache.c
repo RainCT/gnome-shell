@@ -486,34 +486,6 @@ load_pixbuf_thread (GSimpleAsyncResult *result,
           mimetype = data->mimetype;
         }
       pixbuf = impl_load_thumbnail (data->cache, uri, mimetype, data->width, &error);
-      if (!pixbuf && data->recent_info)
-        {
-          pixbuf = gtk_recent_info_get_icon (data->recent_info, data->width);
-        }
-      else if (!pixbuf)
-        {
-          GIcon *icon = icon_for_mimetype (mimetype);
-
-          GtkIconInfo *info = gtk_icon_theme_lookup_by_gicon (
-                                gtk_icon_theme_get_default (),
-                                icon,
-                                data->width,
-                                GTK_ICON_LOOKUP_USE_BUILTIN);
-          g_object_unref (icon);
-
-          if (info)
-            {
-              pixbuf = gtk_icon_info_load_icon (info, NULL);
-              gtk_icon_info_free (info);
-            }
-
-          if (!pixbuf)
-              pixbuf = gtk_icon_theme_load_icon (gtk_icon_theme_get_default (),
-                                                 "gtk-file",
-                                                 data->width,
-                                                 GTK_ICON_LOOKUP_USE_BUILTIN,
-                                                 NULL);
-        }
     }
   else if (data->uri)
     pixbuf = impl_load_pixbuf_file (data->uri, data->width, data->height, &error);
@@ -528,8 +500,9 @@ load_pixbuf_thread (GSimpleAsyncResult *result,
       return;
     }
 
-  g_simple_async_result_set_op_res_gpointer (result, g_object_ref (pixbuf),
-                                             g_object_unref);
+  if (pixbuf)
+    g_simple_async_result_set_op_res_gpointer (result, g_object_ref (pixbuf),
+                                               g_object_unref);
 }
 
 /**
@@ -699,8 +672,38 @@ on_pixbuf_loaded (GObject      *source,
   pixbuf = load_pixbuf_async_finish (cache, result, &error);
   if (pixbuf == NULL)
     {
-      /* TODO - we need a "broken image" display of some sort */
-      goto out;
+      if (data->thumbnail)
+        {
+
+          GtkIconTheme *theme = gtk_icon_theme_get_default ();
+
+          if (data->recent_info)
+            {
+              pixbuf = gtk_recent_info_get_icon (data->recent_info, data->width);
+            }
+          else
+            {
+              GIcon *icon = icon_for_mimetype (data->mimetype);
+              GtkIconInfo *icon_info = gtk_icon_theme_lookup_by_gicon (theme,
+                                                                       icon,
+                                                                       data->width,
+                                                                       GTK_ICON_LOOKUP_USE_BUILTIN);
+              g_object_unref (icon);
+              pixbuf = gtk_icon_info_load_icon (icon_info, NULL);
+            }
+
+          if (pixbuf == NULL)
+            pixbuf = gtk_icon_theme_load_icon (theme,
+                                               "gtk-file",
+                                               data->width,
+                                               GTK_ICON_LOOKUP_USE_BUILTIN,
+                                               NULL);
+        }
+      else
+        {
+          /* TODO - we need a "broken image" display of some sort */
+          goto out;
+        }
     }
 
   texdata = pixbuf_to_cogl_handle (pixbuf);
