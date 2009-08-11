@@ -11,6 +11,7 @@ const Lang = imports.lang;
 
 const AppDisplay = imports.ui.appDisplay;
 const DocDisplay = imports.ui.docDisplay;
+const Places = imports.ui.places;
 const GenericDisplay = imports.ui.genericDisplay;
 const Button = imports.ui.button;
 const Main = imports.ui.main;
@@ -27,11 +28,11 @@ const DASH_TEXT_COLOR = new Clutter.Color();
 DASH_TEXT_COLOR.from_pixel(0xffffffff);
 
 const PANE_BORDER_COLOR = new Clutter.Color();
-PANE_BORDER_COLOR.from_pixel(0x213b5dfa);
+PANE_BORDER_COLOR.from_pixel(0x101d3cfa);
 const PANE_BORDER_WIDTH = 2;
 
 const PANE_BACKGROUND_COLOR = new Clutter.Color();
-PANE_BACKGROUND_COLOR.from_pixel(0x0d131ff4);
+PANE_BACKGROUND_COLOR.from_pixel(0x000000f4);
 
 
 function Pane() {
@@ -428,7 +429,7 @@ Dash.prototype = {
 
         this._appsContent = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL });
         this._appsSection.append(this._appsContent, Big.BoxPackFlags.EXPAND);
-        this._appWell = new AppDisplay.AppWell(this._width);
+        this._appWell = new AppDisplay.AppWell();
         this._appsContent.append(this._appWell.actor, Big.BoxPackFlags.EXPAND);
 
         this._moreAppsPane = null;
@@ -442,6 +443,18 @@ Dash.prototype = {
         }));
 
         this.dashContainer.append(this._appsSection, Big.BoxPackFlags.NONE);
+
+        /***** Places *****/
+
+        let placesSection = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                          spacing: DEFAULT_PADDING });
+        let placesHeader = new SectionHeader("PLACES");
+        placesSection.append(placesHeader.actor, Big.BoxPackFlags.NONE);
+
+        let placesDisplay = new Places.Places();
+        placesSection.append(placesDisplay.actor, Big.BoxPackFlags.EXPAND);
+
+        this.dashContainer.append(placesSection, Big.BoxPackFlags.NONE);
 
         /***** Documents *****/
 

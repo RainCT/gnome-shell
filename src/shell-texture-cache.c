@@ -8,12 +8,12 @@ typedef struct
 {
   ShellTextureCachePolicy policy;
 
-  /* These 3 are exclusive */
+  /* These are exclusive */
   GIcon *icon;
   gchar *uri;
   gchar *thumbnail_uri;
 
-  /* This one is common to all 3 */
+  /* This one is common to all */
   guint size;
 } CacheKey;
 
@@ -32,14 +32,17 @@ static guint
 cache_key_hash (gconstpointer a)
 {
   CacheKey *akey = (CacheKey *)a;
+  guint base_hash;
 
   if (akey->icon)
-    return g_icon_hash (akey->icon) + 31*akey->size;
+    base_hash = g_icon_hash (akey->icon);
   else if (akey->uri)
-    return g_str_hash (akey->uri) + 31*akey->size;
+    base_hash = g_str_hash (akey->uri);
   else if (akey->thumbnail_uri)
-    return g_str_hash (akey->thumbnail_uri) + 31*akey->size;
-  g_assert_not_reached ();
+    base_hash = g_str_hash (akey->thumbnail_uri);
+  else
+    g_assert_not_reached ();
+  return base_hash + 31*akey->size;
 }
 
 static gboolean
@@ -655,6 +658,45 @@ pixbuf_to_cogl_handle (GdkPixbuf *pixbuf)
                                      gdk_pixbuf_get_pixels (pixbuf));
 }
 
+static GdkPixbuf *
+load_pixbuf_fallback(AsyncTextureLoadData *data)
+{
+  GdkPixbuf *pixbuf = NULL;
+
+  if (data->thumbnail)
+    {
+
+      GtkIconTheme *theme = gtk_icon_theme_get_default ();
+
+      if (data->recent_info)
+          pixbuf = gtk_recent_info_get_icon (data->recent_info, data->width);
+      else
+        {
+          GIcon *icon = icon_for_mimetype (data->mimetype);
+          if (icon != NULL)
+            {
+              GtkIconInfo *icon_info = gtk_icon_theme_lookup_by_gicon (theme,
+                                                                       icon,
+                                                                       data->width,
+                                                                       GTK_ICON_LOOKUP_USE_BUILTIN);
+              g_object_unref (icon);
+              if (icon_info != NULL)
+                pixbuf = gtk_icon_info_load_icon (icon_info, NULL);
+            }
+        }
+
+      if (pixbuf == NULL)
+        pixbuf = gtk_icon_theme_load_icon (theme,
+                                           "gtk-file",
+                                           data->width,
+                                           GTK_ICON_LOOKUP_USE_BUILTIN,
+                                           NULL);
+    }
+  /* Maybe we could need a fallback for outher image types? */
+
+  return pixbuf;
+}
+
 static void
 on_pixbuf_loaded (GObject      *source,
                   GAsyncResult *result,
@@ -671,40 +713,9 @@ on_pixbuf_loaded (GObject      *source,
   cache = SHELL_TEXTURE_CACHE (source);
   pixbuf = load_pixbuf_async_finish (cache, result, &error);
   if (pixbuf == NULL)
-    {
-      if (data->thumbnail)
-        {
-
-          GtkIconTheme *theme = gtk_icon_theme_get_default ();
-
-          if (data->recent_info)
-            {
-              pixbuf = gtk_recent_info_get_icon (data->recent_info, data->width);
-            }
-          else
-            {
-              GIcon *icon = icon_for_mimetype (data->mimetype);
-              GtkIconInfo *icon_info = gtk_icon_theme_lookup_by_gicon (theme,
-                                                                       icon,
-                                                                       data->width,
-                                                                       GTK_ICON_LOOKUP_USE_BUILTIN);
-              g_object_unref (icon);
-              pixbuf = gtk_icon_info_load_icon (icon_info, NULL);
-            }
-
-          if (pixbuf == NULL)
-            pixbuf = gtk_icon_theme_load_icon (theme,
-                                               "gtk-file",
-                                               data->width,
-                                               GTK_ICON_LOOKUP_USE_BUILTIN,
-                                               NULL);
-        }
-      else
-        {
-          /* TODO - we need a "broken image" display of some sort */
-          goto out;
-        }
-    }
+    pixbuf = load_pixbuf_fallback(data);
+  if (pixbuf == NULL)
+    goto out;
 
   texdata = pixbuf_to_cogl_handle (pixbuf);
 
@@ -815,7 +826,32 @@ shell_texture_cache_load_gicon (ShellTextureCache *cache,
 }
 
 /**
- * shell_texture_cache_load_uri:
+ * shell_texture_cache_load_icon_name:
+ * @cache: The texture cache instance
+ * @name: Name of a themed icon
+ * @size: Size of themed
+ *
+ * Load a themed icon into a texture.
+ *
+ * Return Value: (transfer none): A new #ClutterTexture for the icon
+ */
+ClutterActor *
+shell_texture_cache_load_icon_name (ShellTextureCache *cache,
+                                    const char        *name,
+                                    gint               size)
+{
+  ClutterActor *texture;
+  GIcon *themed;
+
+  themed = g_themed_icon_new (name);
+  texture = shell_texture_cache_load_gicon (cache, themed, size);
+  g_object_unref (themed);
+
+  return CLUTTER_ACTOR (texture);
+}
+
+/**
+ * shell_texture_cache_load_uri_async:
  *
  * @cache: The texture cache instance
  * @uri: uri of the image file from which to create a pixbuf

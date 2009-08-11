@@ -41,7 +41,7 @@ struct _ShellAppSystemPrivate {
 
   GSList *cached_settings; /* ShellAppInfo */
 
-  GHashTable *cached_favorites; /* <utf8,integer> */
+  GList *cached_favorites; /* utf8 */
 
   gint app_monitor_id;
 };
@@ -54,16 +54,80 @@ static void reread_favorite_apps (ShellAppSystem *system);
 
 G_DEFINE_TYPE(ShellAppSystem, shell_app_system, G_TYPE_OBJECT);
 
+typedef enum {
+  SHELL_APP_INFO_TYPE_ENTRY,
+  SHELL_APP_INFO_TYPE_DESKTOP_FILE
+} ShellAppInfoType;
+
+struct _ShellAppInfo {
+  ShellAppInfoType type;
+
+  /* We need this for two reasons.  First, GKeyFile doesn't have a refcount.
+   * http://bugzilla.gnome.org/show_bug.cgi?id=590808
+   *
+   * But more generally we'll always need it so we know when to free this
+   * structure (short of weak references on each item).
+   */
+  guint refcount;
+
+  GMenuTreeItem *entry;
+
+  GKeyFile *keyfile;
+  char *keyfile_path;
+};
+
 ShellAppInfo*
 shell_app_info_ref (ShellAppInfo *info)
 {
-  return gmenu_tree_item_ref ((GMenuTreeItem*)info);
+  info->refcount++;
+  return info;
 }
 
 void
 shell_app_info_unref (ShellAppInfo *info)
 {
-  gmenu_tree_item_unref ((GMenuTreeItem *)info);
+  if (--info->refcount > 0)
+    return;
+  switch (info->type)
+  {
+  case SHELL_APP_INFO_TYPE_ENTRY:
+    gmenu_tree_item_unref (info->entry);
+    break;
+  case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+    g_key_file_free (info->keyfile);
+    g_free (info->keyfile_path);
+    break;
+  }
+  g_slice_free (ShellAppInfo, info);
+}
+
+static ShellAppInfo *
+shell_app_info_new_from_tree_item (GMenuTreeItem *item)
+{
+  ShellAppInfo *info;
+
+  if (!item)
+    return NULL;
+
+  info = g_slice_alloc (sizeof (ShellAppInfo));
+  info->type = SHELL_APP_INFO_TYPE_ENTRY;
+  info->refcount = 1;
+  info->entry = gmenu_tree_item_ref (item);
+  return info;
+}
+
+static ShellAppInfo *
+shell_app_info_new_from_keyfile_take_ownership (GKeyFile   *keyfile,
+                                                const char *path)
+{
+  ShellAppInfo *info;
+
+  info = g_slice_alloc (sizeof (ShellAppInfo));
+  info->type = SHELL_APP_INFO_TYPE_DESKTOP_FILE;
+  info->refcount = 1;
+  info->keyfile = keyfile;
+  info->keyfile_path = g_strdup (path);
+  return info;
 }
 
 static gpointer
@@ -125,10 +189,6 @@ shell_app_system_init (ShellAppSystem *self)
                                                    SHELL_TYPE_APP_SYSTEM,
                                                    ShellAppSystemPrivate);
 
-  priv->cached_favorites = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                  (GDestroyNotify)g_free,
-                                                  NULL);
-
   /* The key is owned by the value */
   priv->app_id_to_app = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                NULL, (GDestroyNotify) shell_app_info_unref);
@@ -174,7 +234,7 @@ shell_app_system_finalize (GObject *object)
   g_slist_free (priv->cached_settings);
   priv->cached_settings = NULL;
 
-  g_hash_table_destroy (priv->cached_favorites);
+  g_list_free (priv->cached_favorites);
 
   gconf_client_notify_remove (gconf_client_get_default (), priv->app_monitor_id);
 
@@ -241,7 +301,8 @@ gather_entries_recurse (ShellAppSystem     *monitor,
         {
           case GMENU_TREE_ITEM_ENTRY:
             {
-              apps = g_slist_prepend (apps, item);
+              ShellAppInfo *app = shell_app_info_new_from_tree_item (item);
+              apps = g_slist_prepend (apps, app);
             }
             break;
           case GMENU_TREE_ITEM_DIRECTORY:
@@ -249,12 +310,11 @@ gather_entries_recurse (ShellAppSystem     *monitor,
               GMenuTreeDirectory *dir = (GMenuTreeDirectory*)item;
               apps = gather_entries_recurse (monitor, apps, dir);
             }
-            gmenu_tree_item_unref (item);
             break;
           default:
-            gmenu_tree_item_unref (item);
             break;
         }
+      gmenu_tree_item_unref (item);
     }
 
   g_slist_free (contents);
@@ -289,7 +349,7 @@ cache_by_id (ShellAppSystem *self, GSList *apps, gboolean ref)
     {
       ShellAppInfo *info = iter->data;
       if (ref)
-        gmenu_tree_item_ref ((GMenuTreeItem*) info);
+        shell_app_info_ref (info);
       /* the name is owned by the info itself */
       g_hash_table_insert (self->priv->app_id_to_app, (char*)shell_app_info_get_id (info),
                            info);
@@ -327,12 +387,13 @@ on_tree_changed (GMenuTree *monitor, gpointer user_data)
   reread_menus (self);
 }
 
-static void
-copy_gconf_value_string_list_to_hashset (GConfValue *value,
-                                         GHashTable *dest)
+static GList *
+convert_gconf_value_string_list_to_list_uniquify (GConfValue *value )
 {
   GSList *list;
   GSList *tmp;
+  GList *result = NULL;
+  GHashTable *tmp_table = g_hash_table_new (g_str_hash, g_str_equal);
 
   list = gconf_value_get_list (value);
 
@@ -342,8 +403,16 @@ copy_gconf_value_string_list_to_hashset (GConfValue *value,
       char *str = g_strdup (gconf_value_get_string (value));
       if (!str)
         continue;
-      g_hash_table_insert (dest, str, GUINT_TO_POINTER(1));
+      if (g_hash_table_lookup (tmp_table, str))
+        {
+          g_free (str);
+          continue;
+        }
+      g_hash_table_insert (tmp_table, str, GUINT_TO_POINTER(1));
+      result = g_list_prepend (result, str);
     }
+  g_hash_table_destroy (tmp_table);
+  return g_list_reverse (result);
 }
 
 static void
@@ -357,8 +426,9 @@ reread_favorite_apps (ShellAppSystem *system)
   if (!(val && val->type == GCONF_VALUE_LIST && gconf_value_get_list_type (val) == GCONF_VALUE_STRING))
     return;
 
-  g_hash_table_remove_all (system->priv->cached_favorites);
-  copy_gconf_value_string_list_to_hashset (val, system->priv->cached_favorites);
+  g_list_foreach (system->priv->cached_favorites, (GFunc) g_free, NULL);
+  g_list_free (system->priv->cached_favorites);
+  system->priv->cached_favorites = convert_gconf_value_string_list_to_list_uniquify (val);
 
   gconf_value_free (val);
 }
@@ -476,12 +546,12 @@ shell_app_system_get_default ()
  * Return the list of applications which have been explicitly added to the
  * favorites.
  *
- * Return value: (transfer container) (element-type utf8): List of favorite application ids
+ * Return value: (transfer none) (element-type utf8): List of favorite application ids
  */
 GList *
 shell_app_system_get_favorites (ShellAppSystem *system)
 {
-  return g_hash_table_get_keys (system->priv->cached_favorites);
+  return system->priv->cached_favorites;
 }
 
 static void
@@ -503,22 +573,25 @@ set_gconf_value_string_list (GConfValue *val, GList *items)
   g_slist_free (tmp);
 }
 
+
+
 void
 shell_app_system_add_favorite (ShellAppSystem *system, const char *id)
 {
   GConfClient *client = gconf_client_get_default ();
   GConfValue *val;
-  GList *favorites;
+  GList *iter;
+
+  iter = g_list_find_custom (system->priv->cached_favorites, id, (GCompareFunc)strcmp);
+  if (iter)
+    return;
 
   val = gconf_value_new (GCONF_VALUE_LIST);
   gconf_value_set_list_type (val, GCONF_VALUE_STRING);
 
-  g_hash_table_insert (system->priv->cached_favorites, g_strdup (id), GUINT_TO_POINTER (1));
+  system->priv->cached_favorites = g_list_append (system->priv->cached_favorites, g_strdup (id));
 
-  favorites = g_hash_table_get_keys (system->priv->cached_favorites);
-  set_gconf_value_string_list (val, favorites);
-  g_list_free (favorites);
-
+  set_gconf_value_string_list (val, system->priv->cached_favorites);
   gconf_client_set (client, SHELL_APP_FAVORITES_KEY, val, NULL);
 }
 
@@ -527,18 +600,18 @@ shell_app_system_remove_favorite (ShellAppSystem *system, const char *id)
 {
   GConfClient *client = gconf_client_get_default ();
   GConfValue *val;
-  GList *favorites;
+  GList *iter;
 
-  if (!g_hash_table_remove (system->priv->cached_favorites, id))
+  iter = g_list_find_custom (system->priv->cached_favorites, id, (GCompareFunc)strcmp);
+  if (!iter)
     return;
+  g_free (iter->data);
+  system->priv->cached_favorites = g_list_delete_link (system->priv->cached_favorites, iter);
 
   val = gconf_value_new (GCONF_VALUE_LIST);
   gconf_value_set_list_type (val, GCONF_VALUE_STRING);
 
-  favorites = g_hash_table_get_keys (system->priv->cached_favorites);
-  set_gconf_value_string_list (val, favorites);
-  g_list_free (favorites);
-
+  set_gconf_value_string_list (val, system->priv->cached_favorites);
   gconf_client_set (client, SHELL_APP_FAVORITES_KEY, val, NULL);
 }
 
@@ -548,14 +621,52 @@ shell_app_system_remove_favorite (ShellAppSystem *system, const char *id)
  * Return value: (transfer full): The #ShellAppInfo for id, or %NULL if none
  */
 ShellAppInfo *
-shell_app_system_lookup_app (ShellAppSystem *self, const char *id)
+shell_app_system_lookup_cached_app (ShellAppSystem *self, const char *id)
 {
-  GMenuTreeEntry *entry;
+  ShellAppInfo *info;
 
-  entry = g_hash_table_lookup (self->priv->app_id_to_app, id);
-  if (entry)
-    gmenu_tree_item_ref ((GMenuTreeItem*) entry);
-  return (ShellAppInfo*)entry;
+  info = g_hash_table_lookup (self->priv->app_id_to_app, id);
+  if (info)
+    shell_app_info_ref (info);
+  return info;
+}
+
+ShellAppInfo *
+shell_app_system_load_from_desktop_file (ShellAppSystem   *system,
+                                         const char       *filename,
+                                         GError          **error)
+{
+  ShellAppInfo *appinfo;
+  GKeyFile *keyfile;
+  char *full_path = NULL;
+  gboolean success;
+
+  keyfile = g_key_file_new ();
+
+  if (strchr (filename, '/') != NULL)
+    {
+      success = g_key_file_load_from_file (keyfile, filename, G_KEY_FILE_NONE, error);
+      full_path = g_strdup (filename);
+    }
+  else
+    {
+      char *app_path = g_build_filename ("applications", filename, NULL);
+      success = g_key_file_load_from_data_dirs (keyfile, app_path, &full_path,
+                                                G_KEY_FILE_NONE, error);
+      g_free (app_path);
+    }
+
+  if (!success)
+    {
+      g_key_file_free (keyfile);
+      g_free (full_path);
+      return NULL;
+    }
+
+  appinfo = shell_app_info_new_from_keyfile_take_ownership (keyfile, full_path);
+  g_free (full_path);
+
+  return appinfo;
 }
 
 /**
@@ -575,7 +686,7 @@ shell_app_system_lookup_heuristic_basename (ShellAppSystem *system,
   char *tmpid;
   ShellAppInfo *result;
 
-  result = shell_app_system_lookup_app (system, name);
+  result = shell_app_system_lookup_cached_app (system, name);
   if (result != NULL)
     return result;
 
@@ -584,13 +695,13 @@ shell_app_system_lookup_heuristic_basename (ShellAppSystem *system,
    * prefix.  So try stripping them.
    */
   tmpid = g_strjoin ("", "gnome-", name, NULL);
-  result = shell_app_system_lookup_app (system, tmpid);
+  result = shell_app_system_lookup_cached_app (system, tmpid);
   g_free (tmpid);
   if (result != NULL)
     return result;
 
   tmpid = g_strjoin ("", "fedora-", name, NULL);
-  result = shell_app_system_lookup_app (system, tmpid);
+  result = shell_app_system_lookup_cached_app (system, tmpid);
   g_free (tmpid);
   if (result != NULL)
     return result;
@@ -601,37 +712,79 @@ shell_app_system_lookup_heuristic_basename (ShellAppSystem *system,
 const char *
 shell_app_info_get_id (ShellAppInfo *info)
 {
-  return gmenu_tree_entry_get_desktop_file_id ((GMenuTreeEntry*)info);
+  switch (info->type)
+  {
+    case SHELL_APP_INFO_TYPE_ENTRY:
+      return gmenu_tree_entry_get_desktop_file_id ((GMenuTreeEntry*)info->entry);
+    case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+      return info->keyfile_path;
+  }
+  g_assert_not_reached ();
+  return NULL;
 }
 
-const char *
+#define DESKTOP_ENTRY_GROUP "Desktop Entry"
+
+char *
 shell_app_info_get_name (ShellAppInfo *info)
 {
-  return gmenu_tree_entry_get_name ((GMenuTreeEntry*)info);
+  switch (info->type)
+  {
+    case SHELL_APP_INFO_TYPE_ENTRY:
+      return g_strdup (gmenu_tree_entry_get_name ((GMenuTreeEntry*)info->entry));
+    case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+      return g_key_file_get_locale_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Name", NULL, NULL);
+  }
+  g_assert_not_reached ();
+  return NULL;
 }
 
-const char *
+char *
 shell_app_info_get_description (ShellAppInfo *info)
 {
-  return gmenu_tree_entry_get_comment ((GMenuTreeEntry*)info);
+  switch (info->type)
+  {
+    case SHELL_APP_INFO_TYPE_ENTRY:
+      return g_strdup (gmenu_tree_entry_get_comment ((GMenuTreeEntry*)info->entry));
+    case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+      return g_key_file_get_locale_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Comment", NULL, NULL);
+  }
+  g_assert_not_reached ();
+  return NULL;
 }
 
-const char *
+char *
 shell_app_info_get_executable (ShellAppInfo *info)
 {
-  return gmenu_tree_entry_get_exec ((GMenuTreeEntry*)info);
+  switch (info->type)
+  {
+    case SHELL_APP_INFO_TYPE_ENTRY:
+      return g_strdup (gmenu_tree_entry_get_exec ((GMenuTreeEntry*)info->entry));
+    case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+      return g_key_file_get_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Exec", NULL);
+  }
+  g_assert_not_reached ();
+  return NULL;
 }
 
-const char *
+char *
 shell_app_info_get_desktop_file_path (ShellAppInfo *info)
 {
-  return gmenu_tree_entry_get_desktop_file_path ((GMenuTreeEntry*)info);
+  switch (info->type)
+  {
+    case SHELL_APP_INFO_TYPE_ENTRY:
+      return g_strdup (gmenu_tree_entry_get_desktop_file_path ((GMenuTreeEntry*)info->entry));
+    case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+      return g_strdup (info->keyfile_path);;
+  }
+  g_assert_not_reached ();
+  return NULL;
 }
 
 GIcon *
 shell_app_info_get_icon (ShellAppInfo *info)
 {
-  const char *iconname;
+  char *iconname = NULL;
   GIcon *icon;
 
   /* This code adapted from gdesktopappinfo.c
@@ -640,7 +793,16 @@ shell_app_info_get_icon (ShellAppInfo *info)
    * LGPL
    */
 
-  iconname = gmenu_tree_entry_get_icon ((GMenuTreeEntry*)info);
+  switch (info->type)
+  {
+    case SHELL_APP_INFO_TYPE_ENTRY:
+      iconname = g_strdup (gmenu_tree_entry_get_icon ((GMenuTreeEntry*)info->entry));
+      break;
+    case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+      iconname = g_key_file_get_locale_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Icon", NULL, NULL);
+      break;
+  }
+
   if (!iconname)
     return NULL;
 
@@ -668,6 +830,8 @@ shell_app_info_get_icon (ShellAppInfo *info)
       icon = g_themed_icon_new (tmp_name);
       g_free (tmp_name);
     }
+  g_free (iconname);
+
   return icon;
 }
 
@@ -680,7 +844,15 @@ shell_app_info_get_categories (ShellAppInfo *info)
 gboolean
 shell_app_info_get_is_nodisplay (ShellAppInfo *info)
 {
-  return gmenu_tree_entry_get_is_nodisplay ((GMenuTreeEntry*)info);
+  switch (info->type)
+  {
+    case SHELL_APP_INFO_TYPE_ENTRY:
+      return gmenu_tree_entry_get_is_nodisplay ((GMenuTreeEntry*)info);
+    case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+      return FALSE;
+  }
+  g_assert_not_reached ();
+  return TRUE;
 }
 
 /**
@@ -701,7 +873,7 @@ shell_app_info_create_icon_texture (ShellAppInfo *info, float size)
   if (!icon)
     {
       ret = clutter_texture_new ();
-      g_object_set (ret, "width", size, "height", size, NULL);
+      g_object_set (ret, "opacity", 0, "width", size, "height", size, NULL);
       return ret;
     }
 
@@ -725,7 +897,7 @@ shell_app_info_launch_full (ShellAppInfo *info,
                             GError      **error)
 {
   GDesktopAppInfo *gapp;
-  const char *filename;
+  char *filename;
   GdkAppLaunchContext *context;
   gboolean ret;
   ShellGlobal *global;
@@ -735,9 +907,10 @@ shell_app_info_launch_full (ShellAppInfo *info,
   if (startup_id)
     *startup_id = NULL;
 
-  filename = gmenu_tree_entry_get_desktop_file_path ((GMenuTreeEntry*) info);
-
+  filename = shell_app_info_get_desktop_file_path (info);
   gapp = g_desktop_app_info_new_from_filename (filename);
+  g_free (filename);
+
   if (!gapp)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "Not found");
