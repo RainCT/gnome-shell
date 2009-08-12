@@ -18,6 +18,7 @@
 #include "shell-app-monitor.h"
 #include "shell-app-system.h"
 #include "shell-global.h"
+#include "shell-marshal.h"
 
 #include "display.h"
 #include "window.h"
@@ -154,7 +155,10 @@ struct AppUsage
 };
 
 enum {
-  CHANGED,
+  APP_ADDED,
+  APP_REMOVED,
+  WINDOW_ADDED,
+  WINDOW_REMOVED,
   STARTUP_SEQUENCE_CHANGED,
 
   LAST_SIGNAL
@@ -196,13 +200,41 @@ static void shell_app_monitor_class_init(ShellAppMonitorClass *klass)
 
   gobject_class->finalize = shell_app_monitor_finalize;
 
-  signals[CHANGED] = g_signal_new ("changed",
-                                   SHELL_TYPE_APP_MONITOR,
-                                   G_SIGNAL_RUN_LAST,
-                                   0,
-                                   NULL, NULL,
-                                   g_cclosure_marshal_VOID__VOID,
-                                   G_TYPE_NONE, 0);
+  signals[APP_ADDED] = g_signal_new ("app-added",
+                                     SHELL_TYPE_APP_MONITOR,
+                                     G_SIGNAL_RUN_LAST,
+                                     0,
+                                     NULL, NULL,
+                                     _shell_marshal_VOID__BOXED,
+                                     G_TYPE_NONE, 1,
+                                     SHELL_TYPE_APP_INFO);
+  signals[APP_REMOVED] = g_signal_new ("app-removed",
+                                       SHELL_TYPE_APP_MONITOR,
+                                       G_SIGNAL_RUN_LAST,
+                                       0,
+                                       NULL, NULL,
+                                       _shell_marshal_VOID__BOXED,
+                                       G_TYPE_NONE, 1,
+                                       SHELL_TYPE_APP_INFO);
+
+  signals[WINDOW_ADDED] = g_signal_new ("window-added",
+                                        SHELL_TYPE_APP_MONITOR,
+                                        G_SIGNAL_RUN_LAST,
+                                        0,
+                                        NULL, NULL,
+                                        _shell_marshal_VOID__BOXED_OBJECT,
+                                        G_TYPE_NONE, 2,
+                                        SHELL_TYPE_APP_INFO,
+                                        META_TYPE_WINDOW);
+  signals[WINDOW_REMOVED] = g_signal_new ("window-removed",
+                                          SHELL_TYPE_APP_MONITOR,
+                                          G_SIGNAL_RUN_LAST,
+                                          0,
+                                          NULL, NULL,
+                                          _shell_marshal_VOID__BOXED_OBJECT,
+                                          G_TYPE_NONE, 2,
+                                          SHELL_TYPE_APP_INFO,
+                                          META_TYPE_WINDOW);
 
   signals[STARTUP_SEQUENCE_CHANGED] = g_signal_new ("startup-sequence-changed",
                                    SHELL_TYPE_APP_MONITOR,
@@ -270,9 +302,6 @@ get_cleaned_wmclass_for_window (MetaWindow  *window)
 {
   char *wmclass;
   char *cleaned_wmclass;
-
-  if (meta_window_get_window_type (window) != META_WINDOW_NORMAL)
-    return NULL;
 
   wmclass = get_wmclass_for_window (window);
   if (!wmclass)
@@ -510,6 +539,16 @@ track_window (ShellAppMonitor *self,
 {
   ShellAppInfo *app;
   AppUsage *usage;
+  MetaWindow *transient_for;
+
+  /* Just ignore anything that isn't NORMAL */
+  if (meta_window_get_window_type (window) != META_WINDOW_NORMAL)
+    return;
+
+  /* Also ignore transients */
+  transient_for = meta_window_get_transient_for (window);
+  if (transient_for != NULL)
+    return;
 
   app = get_app_for_window (window);
   if (!app)
@@ -519,15 +558,18 @@ track_window (ShellAppMonitor *self,
 
   usage = get_app_usage_from_window (self, window);
 
-  /* Ephemerally keep track of the number of windows open for this app,
-   * when it switches between 0 and 1 we emit a changed signal.
+  /* Keep track of the number of windows open for this app, when it
+   * switches between 0 and 1 we emit an app-added signal.
    */
   usage->window_count++;
   if (usage->initially_seen_sequence == 0)
     usage->initially_seen_sequence = ++self->initially_seen_sequence;
   usage->last_seen = get_time ();
   if (usage->window_count == 1)
-    g_signal_emit (self, signals[CHANGED], 0);
+    g_signal_emit (self, signals[APP_ADDED], 0, app);
+
+  /* Emit window-added after app-added */
+  g_signal_emit (self, signals[WINDOW_ADDED], 0, app, window);
 }
 
 static void
@@ -562,10 +604,12 @@ shell_app_monitor_on_window_removed (MetaWorkspace   *workspace,
   /* Remove before emitting */
   g_hash_table_remove (self->window_to_app, window);
 
+  g_signal_emit (self, signals[WINDOW_REMOVED], 0, app, window);
+
   if (usage->window_count == 0)
     {
       usage->initially_seen_sequence = 0;
-      g_signal_emit (self, signals[CHANGED], 0);
+      g_signal_emit (self, signals[APP_REMOVED], 0);
     }
 }
 
@@ -633,6 +677,8 @@ on_session_status_changed (DBusGProxy      *proxy,
  * shell_app_monitor_get_windows_for_app:
  * @self:
  * @appid: Find windows for this id
+ *
+ * Returns the normal toplevel windows associated with the given application.
  *
  * Returns: (transfer container) (element-type MetaWindow): List of #MetaWindow corresponding to appid
  */
@@ -826,7 +872,14 @@ ShellAppInfo *
 shell_app_monitor_get_window_app (ShellAppMonitor *monitor,
                                   MetaWindow      *metawin)
 {
-  ShellAppInfo *info = g_hash_table_lookup (monitor->window_to_app, metawin);
+  MetaWindow *transient_for;
+  ShellAppInfo *info;
+
+  transient_for = meta_window_get_transient_for (metawin);
+  if (transient_for != NULL)
+    metawin = transient_for;
+
+  info = g_hash_table_lookup (monitor->window_to_app, metawin);
   if (info)
     shell_app_info_ref (info);
   return info;
