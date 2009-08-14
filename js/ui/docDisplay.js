@@ -191,7 +191,7 @@ DocDisplay.prototype = {
             this._allItems = {};
             for (let i = 0; i < items.length; i++)
                 this._allItems[i] = items[i];
-            this._redisplay();
+            this._redisplay(false);
         }
     },
 

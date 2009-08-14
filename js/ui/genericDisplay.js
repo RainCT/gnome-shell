@@ -607,8 +607,7 @@ GenericDisplay.prototype = {
      */
     _redisplay: function(resetPage) {
         this._refreshCache();
-        if (this._filterActive())
-            this._doSearchFilter();
+        this._doSearchFilter();
 
         if (resetPage)
             this._list.page = 0;
