@@ -11,6 +11,8 @@ const Shell = imports.gi.Shell;
 const Lang = imports.lang;
 const Signals = imports.signals;
 const Mainloop = imports.mainloop;
+const Gettext = imports.gettext.domain('gnome-shell');
+const _ = Gettext.gettext;
 
 const DND = imports.ui.dnd;
 const DocDisplay = imports.ui.docDisplay;
@@ -390,7 +392,7 @@ AppDisplay.prototype = {
 
     _redisplayMenus: function() {
         this._menuDisplay.remove_all();
-        this._addMenuItem('Frequent', null, 'gtk-select-all');
+        this._addMenuItem(_("Frequent"), null, 'gtk-select-all');
         for (let i = 0; i < this._menus.length; i++) {
             let menu = this._menus[i];
             this._addMenuItem(menu.name, menu.id, menu.icon, i+1);
