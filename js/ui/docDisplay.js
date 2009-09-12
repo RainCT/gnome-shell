@@ -145,6 +145,7 @@ DocDisplayItem.prototype = {
                 this._details.remove_actor(this._usageInfo);
             this.countUsedEver = this._countUsedMonth = null;
         }
+    },
 
     //// Drag and Drop ////
 

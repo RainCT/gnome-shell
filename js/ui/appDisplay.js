@@ -176,6 +176,7 @@ AppDisplayItem.prototype = {
             } else
                 this._recentItems.text = 'Couldn\'t retrieve related documents information from Zeitgeist.'
         }
+    },
 
     shellWorkspaceLaunch: function() {
         this.launch();
