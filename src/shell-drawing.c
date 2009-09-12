@@ -146,79 +146,33 @@ shell_draw_clock (ClutterCairoTexture *texture,
   cairo_destroy (cr);
 }
 
-static void
-draw_glow (cairo_t *cr, double red, double green, double blue, double alpha)
-{
-  cairo_pattern_t *gradient;
-
-  cairo_save (cr);
-
-  gradient = cairo_pattern_create_radial (0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
-  cairo_pattern_add_color_stop_rgba (gradient, 0.0, red, green, blue, alpha);
-  cairo_pattern_add_color_stop_rgba (gradient, 0.7, red, green, blue, alpha * 0.7);
-  cairo_pattern_add_color_stop_rgba (gradient, 1.0, red, green, blue, alpha * 0.3);
-  cairo_set_source (cr, gradient);
-
-  cairo_arc (cr, 0.0, 0.0, 1.0, 0.0, 2.0 * M_PI);
-  cairo_fill (cr);
-
-  cairo_restore (cr);
-  cairo_pattern_destroy (gradient);
-}
-
 void
-shell_draw_app_highlight (ClutterCairoTexture *texture,
-                          int                  num_windows,
-                          double               red,
-                          double               green,
-                          double               blue,
-                          double               alpha)
+shell_draw_box_pointer (ClutterCairoTexture *texture,
+                        ClutterColor        *border_color,
+                        ClutterColor        *background_color)
 {
-  cairo_t *cr;
   guint width, height;
-
-  g_return_if_fail (num_windows > 0);
+  cairo_t *cr;
 
   clutter_cairo_texture_get_surface_size (texture, &width, &height);
 
   clutter_cairo_texture_clear (texture);
   cr = clutter_cairo_texture_create (texture);
 
-  cairo_save (cr);
-  cairo_translate (cr, width / 2.0, height / 2.0);
+  cairo_set_line_width (cr, 1.0);
 
-  if (num_windows == 1)
-    {
-      cairo_scale (cr, width / 2.0, height / 2.0);
-      draw_glow (cr, red, green, blue, alpha);
-    }
-  else
-    {
-      int num_circles, i;
-      double scale, highlight_width;
+  clutter_cairo_set_source_color (cr, border_color);
 
-      num_circles = num_windows == 2 ? 2 : 3;
+  cairo_move_to (cr, width, 0);
+  cairo_line_to (cr, 0, floor (height * 0.5));
+  cairo_line_to (cr, width, height);
 
-      /* The circles will have radius 1.0 (diameter 2.0) and overlap
-       * by 0.2, so the total width of the highlight is:
-       */
-      highlight_width = 2.0 * num_circles - 0.2 * (num_circles - 1);
+  cairo_stroke_preserve (cr);
 
-      scale = MIN (height / 2.0, width / highlight_width);
-      cairo_scale (cr, scale, scale);
+  clutter_cairo_set_source_color (cr, background_color);
 
-      /* The leftmost circle's left side is at -highlight_width/2, so
-       * its center is that plus 1.
-       */
-      cairo_translate (cr, -highlight_width / 2.0 + 1.0, 0.0);
-      for (i = 0; i < num_circles; i++)
-        {
-          draw_glow (cr, red, green, blue, alpha);
-          cairo_translate (cr, 1.8, 0.0);
-        }
-    }
+  cairo_fill (cr);
 
-  cairo_restore (cr);
   cairo_destroy (cr);
 }
 

@@ -7,10 +7,10 @@ const Gdk = imports.gi.Gdk;
 const Gtk = imports.gi.Gtk;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
+const Meta = imports.gi.Meta;
 const Pango = imports.gi.Pango;
 const Signals = imports.signals;
 const Shell = imports.gi.Shell;
-const Tidy = imports.gi.Tidy;
 
 const Button = imports.ui.button;
 const DND = imports.ui.dnd;
@@ -90,7 +90,6 @@ GenericDisplayItem.prototype = {
                                        spacing: DEFAULT_PADDING });
         this._infoContent.append(this._infoText, Big.BoxPackFlags.EXPAND);
 
-        let global = Shell.Global.get();
         let infoIconUri = "file://" + global.imagedir + "info.svg";
         let infoIcon = Shell.TextureCache.get_default().load_uri_sync(Shell.TextureCachePolicy.FOREVER,
                                                                       infoIconUri,
@@ -128,8 +127,6 @@ GenericDisplayItem.prototype = {
         // It is used for updating the description text inside the details actor when
         // the description text for the item is updated.
         this._detailsDescriptions = [];
-
-        this.dragActor = null;
     },
 
     //// Draggable object interface ////
@@ -137,21 +134,9 @@ GenericDisplayItem.prototype = {
     // Returns a cloned texture of the item's icon to represent the item as it 
     // is being dragged. 
     getDragActor: function(stageX, stageY) {
-        this.dragActor = this._createIcon();
-
-        // If the user dragged from the icon itself, then position
-        // the dragActor over the original icon. Otherwise center it
-        // around the pointer
-        let [iconX, iconY] = this._icon.get_transformed_position();
-        let [iconWidth, iconHeight] = this._icon.get_transformed_size();
-        if (stageX > iconX && stageX <= iconX + iconWidth &&
-            stageY > iconY && stageY <= iconY + iconHeight)
-            this.dragActor.set_position(iconX, iconY);
-        else
-            this.dragActor.set_position(stageX - this.dragActor.width / 2, stageY - this.dragActor.height / 2);
-        return this.dragActor;
+        return this._createIcon();
     },
-    
+
     // Returns the item icon, a separate copy of which is used to
     // represent the item as it is being dragged. This is used to
     // determine a snap-back location for the drag icon if it does
@@ -453,7 +438,15 @@ GenericDisplay.prototype = {
 
     // Returns true if the display has any displayed items.
     hasItems: function() {
-        return this._list.displayedCount > 0;
+        // TODO: figure out why this._list.displayedCount is returning a
+        // positive number when this._mathedItems.length is 0
+        // This can be triggered if a search string is entered for which there are no matches.
+        // log("this._mathedItems.length: " + this._matchedItems.length + " this._list.displayedCount " + this._list.displayedCount);
+        return this._matchedItems.length > 0;
+    },
+
+    getMatchedItemsCount: function() {
+        return this._matchedItems.length;
     },
 
     // Load the initial state
@@ -476,6 +469,15 @@ GenericDisplay.prototype = {
     createDetailsForIndex: function(index) {
         let item = this._findDisplayedByIndex(index);
         return item.createDetailsActor();
+    },
+
+    // Displays the page specified by the pageNumber argument.
+    displayPage: function(pageNumber) {
+        // Cleanup from the previous selection, but don't unset this._selectedIndex
+        if (this.hasSelected()) {
+            this._findDisplayedByIndex(this._selectedIndex).markSelected(false);
+        }
+        this._list.page = pageNumber;
     },
 
     //// Protected methods ////
@@ -505,24 +507,23 @@ GenericDisplay.prototype = {
             this.selectFirstItem();
         }
 
-        // We currently redisplay matching items and raise the sideshow as part of two different callbacks.
-        // Checking what is under the pointer after a timeout allows us to not merge these callbacks into one, at least for now.
-        Mainloop.timeout_add(5,
-                             Lang.bind(this,
-                                       function() {
-                                           // Check if the pointer is over one of the items and display the information button if it is.
-                                           let [child, x, y, mask] = Gdk.Screen.get_default().get_root_window().get_pointer();
-                                           let global = Shell.Global.get();
-                                           let actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE,
-                                                                                     x, y);
-                                           if (actor != null) {
-                                               let item = this._findDisplayedByActor(actor);
-                                               if (item != null) {
-                                                   item.onDrawnUnderPointer();
-                                               }
-                                           }
-                                           return false;
-                                       }));
+        // Check if the pointer is over one of the items and display the information button if it is.
+        // We want to do this between finishing our changes to the display and the point where
+        // the display is redrawn.
+        Mainloop.idle_add(Lang.bind(this,
+                                    function() {
+                                        let [child, x, y, mask] = Gdk.Screen.get_default().get_root_window().get_pointer();
+                                        let actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE,
+                                                                                  x, y);
+                                        if (actor != null) {
+                                            let item = this._findDisplayedByActor(actor);
+                                            if (item != null) {
+                                                item.onDrawnUnderPointer();
+                                            }
+                                        }
+                                        return false;
+                                    }),
+                          Meta.PRIORITY_BEFORE_REDRAW);
     },
 
     // Creates a display item based on the information associated with itemId 
@@ -697,11 +698,6 @@ GenericDisplay.prototype = {
         }));
     },
 
-    // Displays the page specified by the pageNumber argument.
-    _displayPage: function(pageNumber) {
-        this._list.page = pageNumber;
-    },
-
     /*
      * Updates the display control to reflect the matched items set and the page selected.
      *
@@ -713,9 +709,11 @@ GenericDisplay.prototype = {
      */
     _updateDisplayControl: function(resetDisplayControl) {
         if (resetDisplayControl) {
-            this._selectedIndex = -1;
             this.displayControl.remove_all();
             let nPages = this._list.n_pages;
+            // Don't show the page indicator if there is only one page.
+            if (nPages == 1)
+                return;
             let pageNumber = this._list.page;
             for (let i = 0; i < nPages; i++) {
                 let pageControl = new Link.Link({ color: (i == pageNumber) ? DISPLAY_CONTROL_SELECTED_COLOR : ITEM_DISPLAY_DESCRIPTION_COLOR,
@@ -729,7 +727,7 @@ GenericDisplay.prototype = {
                 pageControl.connect('clicked',
                                     Lang.bind(this,
                                               function(o, event) {
-                                                  this._displayPage(pageNumberLocalScope);
+                                                  this.displayPage(pageNumberLocalScope);
                                               }));
             }
         } else {
@@ -744,6 +742,9 @@ GenericDisplay.prototype = {
                     pageControlActor.reactive = true;
                 }
             } 
+        }
+        if (this.hasSelected()) {
+            this.selectFirstItem();
         }
     },
 
@@ -769,17 +770,8 @@ GenericDisplay.prototype = {
     // Selects (e.g. highlights) a display item at the provided index,
     // updates this.selectedItemDetails actor, and emits 'selected' signal.
     _selectIndex: function(index) {
-        if (index >= this._list.displayedCount)
-            return
-
-        // If the item is already selected, all we do is toggling the details pane.
-        if (this._selectedIndex == index && index >= 0) {
-            this.emit('details', index);
-            return;
-        }
-
         // Cleanup from the previous item
-        if (this._selectedIndex >= 0) {
+        if (this.hasSelected()) {
             this._findDisplayedByIndex(this._selectedIndex).markSelected(false);
         }
 

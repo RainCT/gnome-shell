@@ -1,9 +1,11 @@
 NULL = 
 BUILT_SOURCES =
 CLEANFILES =
-EXTRA_DIST = 
+EXTRA_DIST =
 libexec_PROGRAMS =
-noinst_LTLIBRARIES = 
+noinst_LTLIBRARIES =
+
+.AUTOPARALLEL:
 
 bin_SCRIPTS = gnome-shell
 
@@ -14,12 +16,12 @@ gnome-shell: gnome-shell.in
 	    -e "s|@libexecdir[@]|$(libexecdir)|" \
 	    -e "s|@libdir[@]|$(libdir)|" \
 	    -e "s|@pkgdatadir[@]|$(pkgdatadir)|" \
+	    -e "s|@PYTHON[@]|$(PYTHON)|" \
 	    -e "s|@sysconfdir[@]|$(sysconfdir)|" \
 	    $< > $@ && chmod a+x $@
 CLEANFILES += gnome-shell
 EXTRA_DIST += gnome-shell.in
 
-include Makefile-tidy.am
 include Makefile-big.am
 include Makefile-gdmuser.am
 include Makefile-tray.am
@@ -58,6 +60,8 @@ libgnome_shell_la_SOURCES =			\
 	shell-app-system.h			\
 	shell-arrow.c			\
 	shell-arrow.h			\
+	shell-button-box.c           \
+	shell-button-box.h           \
 	shell-drawing.c            \
 	shell-drawing.h            \
 	shell-drawing-area.c			\
@@ -71,6 +75,8 @@ libgnome_shell_la_SOURCES =			\
 	shell-generic-container.h           \
 	shell-gtk-embed.c			\
 	shell-gtk-embed.h			\
+	shell-menu.c       \
+	shell-menu.h       \
 	shell-overflow-list.c		\
 	shell-overflow-list.h		\
 	shell-process.c				\
@@ -147,12 +153,11 @@ libgnome_shell_la_LIBADD =	\
         $(LIBGNOMEUI_LIBS)      \
 	libbig-1.0.la		\
 	libgdmuser-1.0.la	\
-	libtidy-1.0.la		\
 	libtray.la
 libgnome_shell_la_CPPFLAGS = $(gnome_shell_cflags)
 
 typelibdir = $(pkglibdir)
-typelib_DATA = Shell-0.1.typelib Tidy-1.0.typelib Big-1.0.typelib
+typelib_DATA = Shell-0.1.typelib Big-1.0.typelib
 
 Shell-0.1.gir: $(mutter) $(G_IR_SCANNER) Big-1.0.gir libgnome-shell.la Makefile
 	$(AM_V_GEN) $(G_IR_SCANNER)			\
@@ -161,6 +166,7 @@ Shell-0.1.gir: $(mutter) $(G_IR_SCANNER) Big-1.0.gir libgnome-shell.la Makefile
 		--add-include-path=$(MUTTER_LIB_DIR)/mutter/ \
 		--include=Clutter-1.0			\
 		--include=Meta-2.27			\
+		--libtool="$(LIBTOOL)"    \
 		--add-include-path=$(builddir)     \
 		--include=Big-1.0     \
 		--program=mutter			\
@@ -173,33 +179,20 @@ CLEANFILES += Shell-0.1.gir
 # The dependency on libgnome-shell.la here is because g-ir-compiler opens it
 # (not the fake library, since we've already done the rewriting)
 Shell-0.1.typelib: libgnome-shell.la Shell-0.1.gir Big-1.0.gir
-	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}. g-ir-compiler --includedir=$(builddir) --includedir=$(MUTTER_LIB_DIR)/mutter/ Shell-0.1.gir -o $@
+	$(AM_V_GEN) LD_LIBRARY_PATH=.$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}	\
+		$(G_IR_COMPILER)						\
+			--includedir=.						\
+			--includedir=$(MUTTER_LIB_DIR)/mutter/			\
+		Shell-0.1.gir -o $@
 CLEANFILES += Shell-0.1.typelib
 
-Tidy-1.0.gir: $(mutter) $(G_IR_SCANNER) libgnome-shell.la libtidy-1.0.la Makefile
-	$(AM_V_GEN) $(G_IR_SCANNER)			\
-		--namespace=Tidy			\
-		--nsversion=1.0				\
-		--include=Clutter-1.0			\
-		--program=mutter			\
-	        --program-arg=--mutter-plugins=$$(pwd)/libgnome-shell.la \
-		$(addprefix $(srcdir)/,$(tidy_source_h)) \
-		$(addprefix $(srcdir)/,$(tidy_source_c)) \
-		$(srcdir)/tidy-enum-types.h		\
-		$(tidy_cflags)				\
-		-o $@
-CLEANFILES += Tidy-1.0.gir
-
-Tidy-1.0.typelib: libtidy-1.0.la Tidy-1.0.gir
-	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}. g-ir-compiler Tidy-1.0.gir -o $@
-CLEANFILES += Tidy-1.0.typelib
-
-Big-1.0.gir: $(mutter) $(G_IR_SCANNER) libgnome-shell.la libbig-1.0.la Makefile
+Big-1.0.gir: $(mutter) $(G_IR_SCANNER) libgnome-shell.la libbig-1.0.la $(srcdir)/big-enum-types.h Makefile
 	$(AM_V_GEN) $(G_IR_SCANNER)			\
 		--namespace=Big				\
 		--nsversion=1.0				\
 		--include=Clutter-1.0			\
 		--include=GdkPixbuf-2.0			\
+		--libtool="$(LIBTOOL)"    \
 		--program=mutter			\
 	        --program-arg=--mutter-plugins=$$(pwd)/libgnome-shell.la \
 		$(addprefix $(srcdir)/,$(big_source_h))	\
@@ -210,5 +203,6 @@ Big-1.0.gir: $(mutter) $(G_IR_SCANNER) libgnome-shell.la libbig-1.0.la Makefile
 CLEANFILES += Big-1.0.gir
 
 Big-1.0.typelib: libbig-1.0.la Big-1.0.gir
-	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}. g-ir-compiler Big-1.0.gir -o $@
+	$(AM_V_GEN) LD_LIBRARY_PATH=.$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH} \
+		$(G_IR_COMPILER) Big-1.0.gir -o $@
 CLEANFILES += Big-1.0.typelib

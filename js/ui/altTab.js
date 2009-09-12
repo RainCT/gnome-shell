@@ -36,18 +36,14 @@ function AltTabPopup() {
 
 AltTabPopup.prototype = {
     _init : function() {
-        let global = Shell.Global.get();
-
         this.actor = new Big.Box({ background_color : POPUP_BG_COLOR,
                                    corner_radius: POPUP_GRID_SPACING,
                                    padding: POPUP_GRID_SPACING,
                                    spacing: POPUP_GRID_SPACING,
                                    orientation: Big.BoxOrientation.VERTICAL });
 
-        // Icon grid. It would be nice to use Tidy.Grid for the this,
-        // but Tidy.Grid is lame in various ways. (Eg, it seems to
-        // have a minimum size of 200x200.) So we create a vertical
-        // Big.Box containing multiple horizontal Big.Boxes.
+        // Icon grid.  TODO: Investigate Nbtk.Grid once that lands.  Currently
+        // just implemented using a chain of Big.Box.
         this._grid = new Big.Box({ spacing: POPUP_GRID_SPACING,
                                    orientation: Big.BoxOrientation.VERTICAL });
         let gcenterbox = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
@@ -142,10 +138,6 @@ AltTabPopup.prototype = {
     },
 
     show : function(initialSelection) {
-        let global = Shell.Global.get();
-
-        Main.startModal();
-
         global.window_group.add_actor(this._overlay);
         this._overlay.raise_top();
         this._overlay.show();
@@ -164,8 +156,6 @@ AltTabPopup.prototype = {
     destroy : function() {
         this.actor.destroy();
         this._overlay.destroy();
-
-        Main.endModal();
     },
 
     select : function(n) {
@@ -240,8 +230,6 @@ AltTabPopup.prototype = {
     },
 
     _adjust_overlay : function() {
-        let global = Shell.Global.get();
-
         if (this._selected && this._selected.icon_rect) {
             // We want to highlight a specific rectangle within the
             // task bar, so rearrange the pieces of the overlay to

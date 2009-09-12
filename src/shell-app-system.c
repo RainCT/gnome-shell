@@ -19,6 +19,13 @@
 
 #define SHELL_APP_FAVORITES_KEY "/desktop/gnome/shell/favorite_apps"
 
+/* Vendor prefixes are something that can be preprended to a .desktop
+ * file name.  Undo this.
+ */
+static const char*const known_vendor_prefixes[] = { "gnome",
+                                                    "fedora",
+                                                    "mozilla" };
+
 enum {
    PROP_0,
 
@@ -45,10 +52,13 @@ struct _ShellAppSystemPrivate {
   GList *cached_favorites; /* utf8 */
 
   gint app_monitor_id;
+
+  guint app_change_timeout_id;
 };
 
 static void shell_app_system_finalize (GObject *object);
-static void on_tree_changed (GMenuTree *tree, gpointer user_data);
+static gboolean on_tree_changed (gpointer user_data);
+static void on_tree_changed_cb (GMenuTree *tree, gpointer user_data);
 static void reread_menus (ShellAppSystem *self);
 static void on_favorite_apps_changed (GConfClient *client, guint id, GConfEntry *entry, gpointer user_data);
 static void reread_favorite_apps (ShellAppSystem *system);
@@ -57,7 +67,8 @@ G_DEFINE_TYPE(ShellAppSystem, shell_app_system, G_TYPE_OBJECT);
 
 typedef enum {
   SHELL_APP_INFO_TYPE_ENTRY,
-  SHELL_APP_INFO_TYPE_DESKTOP_FILE
+  SHELL_APP_INFO_TYPE_DESKTOP_FILE,
+  SHELL_APP_INFO_TYPE_WINDOW
 } ShellAppInfoType;
 
 struct _ShellAppInfo {
@@ -75,6 +86,9 @@ struct _ShellAppInfo {
 
   GKeyFile *keyfile;
   char *keyfile_path;
+
+  MetaWindow *window;
+  char *window_id;
 };
 
 ShellAppInfo*
@@ -98,6 +112,10 @@ shell_app_info_unref (ShellAppInfo *info)
     g_key_file_free (info->keyfile);
     g_free (info->keyfile_path);
     break;
+  case SHELL_APP_INFO_TYPE_WINDOW:
+    g_object_unref (info->window);
+    g_free (info->window_id);
+    break;
   }
   g_slice_free (ShellAppInfo, info);
 }
@@ -114,6 +132,23 @@ shell_app_info_new_from_tree_item (GMenuTreeItem *item)
   info->type = SHELL_APP_INFO_TYPE_ENTRY;
   info->refcount = 1;
   info->entry = gmenu_tree_item_ref (item);
+  return info;
+}
+
+static ShellAppInfo *
+shell_app_info_new_from_window (MetaWindow *window)
+{
+  ShellAppInfo *info;
+
+  info = g_slice_alloc (sizeof (ShellAppInfo));
+  info->type = SHELL_APP_INFO_TYPE_WINDOW;
+  info->refcount = 1;
+  info->window = g_object_ref (window);
+  /* For windows, its id is simply its pointer address as a string.
+   * There are various other alternatives, but the address is unique
+   * and unchanging, which is pretty much the best we can do.
+   */
+  info->window_id = g_strdup_printf ("window:%p", window);
   return info;
 }
 
@@ -201,8 +236,10 @@ shell_app_system_init (ShellAppSystem *self)
   priv->apps_tree = gmenu_tree_lookup ("applications.menu", GMENU_TREE_FLAGS_INCLUDE_NODISPLAY);
   priv->settings_tree = gmenu_tree_lookup ("settings.menu", GMENU_TREE_FLAGS_NONE);
 
-  gmenu_tree_add_monitor (priv->apps_tree, on_tree_changed, self);
-  gmenu_tree_add_monitor (priv->settings_tree, on_tree_changed, self);
+  priv->app_change_timeout_id = 0;
+
+  gmenu_tree_add_monitor (priv->apps_tree, on_tree_changed_cb, self);
+  gmenu_tree_add_monitor (priv->settings_tree, on_tree_changed_cb, self);
 
   reread_menus (self);
 
@@ -219,8 +256,8 @@ shell_app_system_finalize (GObject *object)
   ShellAppSystem *self = SHELL_APP_SYSTEM (object);
   ShellAppSystemPrivate *priv = self->priv;
 
-  gmenu_tree_remove_monitor (priv->apps_tree, on_tree_changed, self);
-  gmenu_tree_remove_monitor (priv->settings_tree, on_tree_changed, self);
+  gmenu_tree_remove_monitor (priv->apps_tree, on_tree_changed_cb, self);
+  gmenu_tree_remove_monitor (priv->settings_tree, on_tree_changed_cb, self);
 
   gmenu_tree_unref (priv->apps_tree);
   gmenu_tree_unref (priv->settings_tree);
@@ -378,14 +415,39 @@ reread_menus (ShellAppSystem *self)
   cache_by_id (self, self->priv->cached_settings, TRUE);
 }
 
+static gboolean
+on_tree_changed (gpointer user_data)
+{
+  ShellAppSystem *self = SHELL_APP_SYSTEM (user_data);
+  g_signal_emit (self, signals[INSTALLED_CHANGED], 0);
+  reread_menus (self);
+  self->priv->app_change_timeout_id = 0;
+  return FALSE;
+}
+
 static void
-on_tree_changed (GMenuTree *monitor, gpointer user_data)
+on_tree_changed_cb (GMenuTree *monitor, gpointer user_data)
 {
   ShellAppSystem *self = SHELL_APP_SYSTEM (user_data);
 
-  g_signal_emit (self, signals[INSTALLED_CHANGED], 0);
+  /* GMenu currently gives us a separate notification on the entire
+   * menu tree for each node in the tree that might potentially have
+   * changed. (See http://bugzilla.gnome.org/show_bug.cgi?id=172046.)
+   * We need to compress these to avoid doing large extra amounts of
+   * work.
+   *
+   * Even when that bug is fixed, compression is still useful; for one
+   * thing we want to need to compress across notifications of changes
+   * to the settings tree. Second we want to compress if multiple
+   * changes are made to the desktop files at different times but in
+   * short succession.
+   */
 
-  reread_menus (self);
+  if (self->priv->app_change_timeout_id != 0)
+    return;
+  self->priv->app_change_timeout_id = g_timeout_add_full (G_PRIORITY_DEFAULT_IDLE, 3000,
+                                                          (GSourceFunc) on_tree_changed,
+                                                          self, NULL);
 }
 
 static GList *
@@ -574,8 +636,6 @@ set_gconf_value_string_list (GConfValue *val, GList *items)
   g_slist_free (tmp);
 }
 
-
-
 void
 shell_app_system_add_favorite (ShellAppSystem *system, const char *id)
 {
@@ -671,6 +731,21 @@ shell_app_system_load_from_desktop_file (ShellAppSystem   *system,
 }
 
 /**
+ * shell_app_system_create_from_window:
+ *
+ * In the case where we can't otherwise determine an application
+ * associated with a window, this function can create a "fake"
+ * application just backed by information from the window itself.
+ *
+ * Return value: (transfer full): A new #ShellAppInfo
+ */
+ShellAppInfo *
+shell_app_system_create_from_window (ShellAppSystem *system, MetaWindow *window)
+{
+  return shell_app_info_new_from_window (window);
+}
+
+/**
  * shell_app_system_lookup_heuristic_basename:
  * @name: Probable application identifier
  *
@@ -684,28 +759,22 @@ ShellAppInfo *
 shell_app_system_lookup_heuristic_basename (ShellAppSystem *system,
                                             const char *name)
 {
-  char *tmpid;
   ShellAppInfo *result;
+  char **vendor_prefixes;
 
   result = shell_app_system_lookup_cached_app (system, name);
   if (result != NULL)
     return result;
 
-  /* These are common "vendor prefixes".  But using
-   * WM_CLASS as a source, we don't get the vendor
-   * prefix.  So try stripping them.
-   */
-  tmpid = g_strjoin ("", "gnome-", name, NULL);
-  result = shell_app_system_lookup_cached_app (system, tmpid);
-  g_free (tmpid);
-  if (result != NULL)
-    return result;
-
-  tmpid = g_strjoin ("", "fedora-", name, NULL);
-  result = shell_app_system_lookup_cached_app (system, tmpid);
-  g_free (tmpid);
-  if (result != NULL)
-    return result;
+  for (vendor_prefixes = (char**)known_vendor_prefixes;
+       *vendor_prefixes; vendor_prefixes++)
+    {
+      char *tmpid = g_strjoin (NULL, *vendor_prefixes, "-", name, NULL);
+      result = shell_app_system_lookup_cached_app (system, tmpid);
+      g_free (tmpid);
+      if (result != NULL)
+        return result;
+    }
 
   return NULL;
 }
@@ -719,6 +788,8 @@ shell_app_info_get_id (ShellAppInfo *info)
       return gmenu_tree_entry_get_desktop_file_id ((GMenuTreeEntry*)info->entry);
     case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
       return info->keyfile_path;
+    case SHELL_APP_INFO_TYPE_WINDOW:
+      return info->window_id;
   }
   g_assert_not_reached ();
   return NULL;
@@ -735,6 +806,12 @@ shell_app_info_get_name (ShellAppInfo *info)
       return g_strdup (gmenu_tree_entry_get_name ((GMenuTreeEntry*)info->entry));
     case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
       return g_key_file_get_locale_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Name", NULL, NULL);
+    case SHELL_APP_INFO_TYPE_WINDOW:
+      {
+        char *title;
+        g_object_get (info->window, "title", &title, NULL);
+        return title;
+      }
   }
   g_assert_not_reached ();
   return NULL;
@@ -749,6 +826,8 @@ shell_app_info_get_description (ShellAppInfo *info)
       return g_strdup (gmenu_tree_entry_get_comment ((GMenuTreeEntry*)info->entry));
     case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
       return g_key_file_get_locale_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Comment", NULL, NULL);
+    case SHELL_APP_INFO_TYPE_WINDOW:
+      return NULL;
   }
   g_assert_not_reached ();
   return NULL;
@@ -763,6 +842,8 @@ shell_app_info_get_executable (ShellAppInfo *info)
       return g_strdup (gmenu_tree_entry_get_exec ((GMenuTreeEntry*)info->entry));
     case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
       return g_key_file_get_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Exec", NULL);
+    case SHELL_APP_INFO_TYPE_WINDOW:
+      return NULL;
   }
   g_assert_not_reached ();
   return NULL;
@@ -776,13 +857,49 @@ shell_app_info_get_desktop_file_path (ShellAppInfo *info)
     case SHELL_APP_INFO_TYPE_ENTRY:
       return g_strdup (gmenu_tree_entry_get_desktop_file_path ((GMenuTreeEntry*)info->entry));
     case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
-      return g_strdup (info->keyfile_path);;
+      return g_strdup (info->keyfile_path);
+    case SHELL_APP_INFO_TYPE_WINDOW:
+      return NULL;
   }
   g_assert_not_reached ();
   return NULL;
 }
 
-GIcon *
+static GIcon *
+themed_icon_from_name (const char *iconname)
+{
+  GIcon *icon;
+
+  if (!iconname)
+     return NULL;
+
+  if (g_path_is_absolute (iconname))
+    {
+      GFile *file;
+      file = g_file_new_for_path (iconname);
+      icon = G_ICON (g_file_icon_new (file));
+      g_object_unref (file);
+     }
+  else
+    {
+      char *tmp_name, *p;
+      tmp_name = strdup (iconname);
+      /* Work around a common mistake in desktop files */
+      if ((p = strrchr (tmp_name, '.')) != NULL &&
+          (strcmp (p, ".png") == 0 ||
+           strcmp (p, ".xpm") == 0 ||
+           strcmp (p, ".svg") == 0))
+        {
+          *p = 0;
+        }
+      icon = g_themed_icon_new (tmp_name);
+      g_free (tmp_name);
+    }
+
+  return icon;
+}
+
+static GIcon *
 shell_app_info_get_icon (ShellAppInfo *info)
 {
   char *iconname = NULL;
@@ -797,43 +914,18 @@ shell_app_info_get_icon (ShellAppInfo *info)
   switch (info->type)
   {
     case SHELL_APP_INFO_TYPE_ENTRY:
-      iconname = g_strdup (gmenu_tree_entry_get_icon ((GMenuTreeEntry*)info->entry));
-      break;
+      return themed_icon_from_name (gmenu_tree_entry_get_icon ((GMenuTreeEntry*)info->entry));
     case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
       iconname = g_key_file_get_locale_string (info->keyfile, DESKTOP_ENTRY_GROUP, "Icon", NULL, NULL);
+      icon = themed_icon_from_name (iconname);
+      g_free (iconname);
+      return icon;
       break;
+    case SHELL_APP_INFO_TYPE_WINDOW:
+      return NULL;
   }
-
-  if (!iconname)
-    return NULL;
-
-  if (g_path_is_absolute (iconname))
-    {
-      GFile *file;
-
-      file = g_file_new_for_path (iconname);
-      icon = G_ICON (g_file_icon_new (file));
-      g_object_unref (file);
-    }
-  else
-    {
-      char *tmp_name, *p;
-      tmp_name = strdup (iconname);
-      /* Work around a common mistake in desktop files */
-      if ((p = strrchr (tmp_name, '.')) != NULL &&
-          (strcmp (p, ".png") == 0 ||
-           strcmp (p, ".xpm") == 0 ||
-           strcmp (p, ".svg") == 0))
-        {
-          *p = 0;
-        }
-
-      icon = g_themed_icon_new (tmp_name);
-      g_free (tmp_name);
-    }
-  g_free (iconname);
-
-  return icon;
+  g_assert_not_reached ();
+  return NULL;
 }
 
 GSList *
@@ -850,10 +942,24 @@ shell_app_info_get_is_nodisplay (ShellAppInfo *info)
     case SHELL_APP_INFO_TYPE_ENTRY:
       return gmenu_tree_entry_get_is_nodisplay ((GMenuTreeEntry*)info->entry);
     case SHELL_APP_INFO_TYPE_DESKTOP_FILE:
+    case SHELL_APP_INFO_TYPE_WINDOW:
       return FALSE;
   }
   g_assert_not_reached ();
   return TRUE;
+}
+
+/**
+ * shell_app_info_is_transient:
+ *
+ * A "transient" application is one which represents
+ * just an open window, i.e. we don't know how to launch it
+ * again.
+ */
+gboolean
+shell_app_info_is_transient (ShellAppInfo *info)
+{
+  return info->type == SHELL_APP_INFO_TYPE_WINDOW;
 }
 
 /**
@@ -869,6 +975,13 @@ shell_app_info_create_icon_texture (ShellAppInfo *info, float size)
 {
   GIcon *icon;
   ClutterActor *ret;
+
+  if (info->type == SHELL_APP_INFO_TYPE_WINDOW)
+    {
+      return shell_texture_cache_bind_pixbuf_property (shell_texture_cache_get_default (),
+                                                       G_OBJECT (info->window),
+                                                       "icon");
+    }
 
   icon = shell_app_info_get_icon (info);
   if (!icon)
@@ -907,6 +1020,17 @@ shell_app_info_launch_full (ShellAppInfo *info,
 
   if (startup_id)
     *startup_id = NULL;
+
+  if (info->type == SHELL_APP_INFO_TYPE_WINDOW)
+    {
+      /* We can't pass URIs into a window; shouldn't hit this
+       * code path.  If we do, fix the caller to disallow it.
+       */
+      g_return_val_if_fail (uris == NULL, TRUE);
+
+      meta_window_activate (info->window, timestamp);
+      return TRUE;
+    }
 
   filename = shell_app_info_get_desktop_file_path (info);
   gapp = g_desktop_app_info_new_from_filename (filename);

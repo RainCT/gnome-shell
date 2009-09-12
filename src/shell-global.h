@@ -36,10 +36,6 @@ GType            shell_global_get_type            (void) G_GNUC_CONST;
 gboolean shell_clutter_texture_set_from_pixbuf (ClutterTexture *texture,
                                                 GdkPixbuf      *pixbuf);
 
-guint16 shell_get_event_key_symbol(ClutterEvent *event);
-
-guint16 shell_get_button_event_click_count(ClutterEvent *event);
-
 ClutterActor *shell_get_event_related(ClutterEvent *event);
 
 ShellGlobal *shell_global_get (void);
@@ -64,8 +60,12 @@ GList *shell_global_get_windows (ShellGlobal *global);
 void _shell_global_set_plugin (ShellGlobal  *global,
 			       MutterPlugin *plugin);
 
-gboolean shell_global_grab_keyboard   (ShellGlobal *global);
-void     shell_global_ungrab_keyboard (ShellGlobal *global);
+gboolean shell_global_begin_modal (ShellGlobal *global,
+				   guint32      timestamp);
+void     shell_global_end_modal   (ShellGlobal *global,
+				   guint32      timestamp);
+
+gboolean shell_global_display_is_grabbed (ShellGlobal *global);
 
 void shell_global_reexec_self (ShellGlobal *global);
 

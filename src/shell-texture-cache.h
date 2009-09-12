@@ -40,6 +40,10 @@ GType shell_texture_cache_get_type (void) G_GNUC_CONST;
 
 ShellTextureCache* shell_texture_cache_get_default (void);
 
+ClutterActor *shell_texture_cache_bind_pixbuf_property (ShellTextureCache *cache,
+                                                        GObject           *object,
+                                                        const char        *property_name);
+
 ClutterActor *shell_texture_cache_load_icon_name (ShellTextureCache *cache,
                                                   const char        *name,
                                                   gint               size);
@@ -58,11 +62,9 @@ ClutterActor *shell_texture_cache_load_recent_thumbnail (ShellTextureCache *cach
                                                          GtkRecentInfo     *info);
 
 void shell_texture_cache_evict_thumbnail (ShellTextureCache *cache,
-                                          int                size,
                                           const char        *uri);
 
 void shell_texture_cache_evict_recent_thumbnail (ShellTextureCache *cache,
-                                                 int                size,
                                                  GtkRecentInfo     *info);
 
 ClutterActor *shell_texture_cache_load_uri_async (ShellTextureCache *cache,
@@ -76,5 +78,7 @@ ClutterActor *shell_texture_cache_load_uri_sync (ShellTextureCache *cache,
                                                  int                available_width,
                                                  int                available_height,
                                                  GError           **error);
+
+gboolean shell_texture_cache_pixbuf_equal (ShellTextureCache *cache, GdkPixbuf *a, GdkPixbuf *b);
 
 #endif /* __SHELL_TEXTURE_CACHE_H__ */

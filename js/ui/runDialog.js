@@ -2,6 +2,7 @@
 
 const Big = imports.gi.Big;
 const Clutter = imports.gi.Clutter;
+const GLib = imports.gi.GLib;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
 const Shell = imports.gi.Shell;
@@ -20,8 +21,10 @@ BOX_BACKGROUND_COLOR.from_pixel(0x000000cc);
 const BOX_TEXT_COLOR = new Clutter.Color();
 BOX_TEXT_COLOR.from_pixel(0xffffffff);
 
-const BOX_WIDTH = 320;
-const BOX_HEIGHT = 56;
+const DIALOG_WIDTH = 320;
+const DIALOG_PADDING = 6;
+const ICON_SIZE = 24;
+const ICON_BOX_SIZE = 36;
 
 function RunDialog() {
     this._init();
@@ -29,17 +32,20 @@ function RunDialog() {
 
 RunDialog.prototype = {
     _init : function() {
-        let global = Shell.Global.get();
-
         this._isOpen = false;
 
         this._internalCommands = { 'lg':
                                    Lang.bind(this, function() {
+                                       // Run in an idle to avoid recursive key grab problems
                                        Mainloop.idle_add(function() { Main.createLookingGlass().open(); });
                                    }),
-                                   
+
+                                   'r': Lang.bind(this, function() {
+                                       global.reexec_self();
+                                   }),
+
+                                   // Developer brain backwards compatibility
                                    'restart': Lang.bind(this, function() {
-                                       let global = Shell.Global.get();
                                        global.reexec_self();
                                    })
                                  };
@@ -56,45 +62,77 @@ RunDialog.prototype = {
                                                 reactive: true });
         this._group.add_actor(this._overlay);
 
-        let boxGroup = new Clutter.Group();
-        boxGroup.set_position((global.screen_width - BOX_WIDTH) / 2,
-                              (global.screen_height - BOX_HEIGHT) / 2);
-        this._group.add_actor(boxGroup);
+        let boxH = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                 x_align: Big.BoxAlignment.CENTER,
+                                 y_align: Big.BoxAlignment.CENTER,
+                                 width: global.screen_width,
+                                 height: global.screen_height });
 
-        let box = new Big.Box({ background_color: BOX_BACKGROUND_COLOR,
-                                corner_radius: 4,
-                                reactive: false,
-                                width: BOX_WIDTH,
-                                height: BOX_HEIGHT
-                              });
-        boxGroup.add_actor(box);
+        this._group.add_actor(boxH);
+
+        let boxV = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                 y_align: Big.BoxAlignment.CENTER });
+
+        boxH.append(boxV, Big.BoxPackFlags.NONE);
+
+
+        let dialogBox = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                      background_color: BOX_BACKGROUND_COLOR,
+                                      corner_radius: 4,
+                                      reactive: false,
+                                      padding: DIALOG_PADDING,
+                                      width: DIALOG_WIDTH });
+
+        boxH.append(dialogBox, Big.BoxPackFlags.NONE);
 
         let label = new Clutter.Text({ color: BOX_TEXT_COLOR,
                                        font_name: '18px Sans',
                                        text: _("Please enter a command:") });
-        label.set_position(6, 6);
-        boxGroup.add_actor(label);
+
+        dialogBox.append(label, Big.BoxPackFlags.EXPAND);
 
         this._entry = new Clutter.Text({ color: BOX_TEXT_COLOR,
                                          font_name: '20px Sans Bold',
                                          editable: true,
                                          activatable: true,
-                                         singleLineMode: true,
-                                         text: '',
-                                         width: BOX_WIDTH - 12,
-                                         height: BOX_HEIGHT - 12 });
-        // TODO: Implement relative positioning using Tidy.
-        this._entry.set_position(6, 30);
-        boxGroup.add_actor(this._entry);
+                                         singleLineMode: true });
+
+        dialogBox.append(this._entry, Big.BoxPackFlags.EXPAND);
+
+        this._errorBox = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL,
+                                       padding_top: DIALOG_PADDING });
+
+        dialogBox.append(this._errorBox, Big.BoxPackFlags.EXPAND);
+
+        let iconBox = new Big.Box({ orientation: Big.BoxOrientation.VERTICAL,
+                                    y_align: Big.BoxAlignment.CENTER,
+                                    x_align: Big.BoxAlignment.CENTER,
+                                    width: ICON_BOX_SIZE,
+                                    height: ICON_BOX_SIZE });
+
+        this._errorBox.append(iconBox, Big.BoxPackFlags.NONE);
+
+        this._commandError = false;
+
+        let errorIcon = Shell.TextureCache.get_default().load_icon_name("gtk-dialog-error", ICON_SIZE);
+        iconBox.append(errorIcon, Big.BoxPackFlags.EXPAND);
+
+        this._errorMessage = new Clutter.Text({ color: BOX_TEXT_COLOR,
+                                                font_name: '18px Sans Bold',
+                                                line_wrap: true });
+
+        this._errorBox.append(this._errorMessage, Big.BoxPackFlags.EXPAND);
+
+        this._errorBox.hide();
 
         this._entry.connect('activate', Lang.bind(this, function (o, e) {
             this._run(o.get_text());
-            this.close();
-            return false;
+            if (!this._commandError)
+                this.close();
         }));
-        
+
         this._entry.connect('key-press-event', Lang.bind(this, function(o, e) {
-            let symbol = Shell.get_event_key_symbol(e); 
+            let symbol = e.get_key_symbol();
             if (symbol == Clutter.Escape) {
                 this.close();
                 return true;
@@ -108,12 +146,23 @@ RunDialog.prototype = {
         if (f) {
             f();
         } else if (command) {
-            var p = new Shell.Process({'args' : [command]});
             try {
+                this._commandError = false;
+                let [ok, len, args] = GLib.shell_parse_argv(command);
+                let p = new Shell.Process({'args' : args});
                 p.run();
             } catch (e) {
-                // TODO: Give the user direct feedback.
-                log('Could not run command ' + command + '.');
+                this._commandError = true;
+                /*
+                 * The exception contains an error string like:
+                 * Error invoking Shell.run: Failed to execute child process "foo"
+                 * (No such file or directory)
+                 * We are only interested in the actual error, so parse that out.
+                 */
+                let m = /.+\((.+)\)/.exec(e);
+                let errorStr = "Execution of '" + command + "' failed:\n" + m[1];
+                this._errorMessage.set_text(errorStr);
+                this._errorBox.show();
             }
         }
     },
@@ -122,13 +171,12 @@ RunDialog.prototype = {
         if (this._isOpen) // Already shown
             return;
 
-        if (!Main.startModal())
+        if (!Main.beginModal())
             return;
             
         this._isOpen = true;
         this._group.show();
 
-        let global = Shell.Global.get();
         global.stage.set_key_focus(this._entry);
     },
 
@@ -138,6 +186,9 @@ RunDialog.prototype = {
 
         this._isOpen = false;
         
+        this._errorBox.hide();
+        this._commandError = false;
+
         this._group.hide();
         this._entry.text = '';
 

@@ -11,9 +11,7 @@ const Pango = imports.gi.Pango;
 const Shell = imports.gi.Shell;
 const Signals = imports.signals;
 
-const AppDisplay = imports.ui.appDisplay;
 const DND = imports.ui.dnd;
-const GenericDisplay = imports.ui.genericDisplay;
 const Main = imports.ui.main;
 const Overview = imports.ui.overview;
 const Panel = imports.ui.panel;
@@ -27,6 +25,12 @@ const WINDOWCLONE_TITLE_COLOR = new Clutter.Color();
 WINDOWCLONE_TITLE_COLOR.from_pixel(0xffffffff);
 const FRAME_COLOR = new Clutter.Color();
 FRAME_COLOR.from_pixel(0xffffffff);
+const LIGHTBOX_COLOR = new Clutter.Color();
+LIGHTBOX_COLOR.from_pixel(0x00000044);
+
+const SCROLL_SCALE_AMOUNT = 100 / 5;
+
+const ZOOM_OVERLAY_FADE_TIME = 0.15;
 
 // Define a layout scheme for small window counts. For larger
 // counts we fall back to an algorithm. We need more schemes here
@@ -42,13 +46,53 @@ const POSITIONS = {
         5: [[0.165, 0.25, 0.32], [0.495, 0.25, 0.32], [0.825, 0.25, 0.32], [0.25, 0.75, 0.32], [0.75, 0.75, 0.32]]
 };
 
+
+function _interpolate(start, end, step) {
+    return start + (end - start) * step;
+}
+
+function _clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
 // Spacing between workspaces. At the moment, the same spacing is used
 // in both zoomed-in and zoomed-out views; this is slightly
 // metaphor-breaking, but the alternatives are also weird.
 const GRID_SPACING = 15;
 const FRAME_SIZE = GRID_SPACING / 3;
 
-let buttonSize = false;
+function ScaledPoint(x, y, scaleX, scaleY) {
+    [this.x, this.y, this.scaleX, this.scaleY] = arguments;
+}
+
+ScaledPoint.prototype = {
+    getPosition : function() {
+        return [this.x, this.y];
+    },
+
+    getScale : function() {
+        return [this.scaleX, this.scaleY];
+    },
+
+    setPosition : function(x, y) {
+        [this.x, this.y] = arguments;
+    },
+
+    setScale : function(scaleX, scaleY) {
+        [this.scaleX, this.scaleY] = arguments;
+    },
+
+    interpPosition : function(other, step) {
+        return [_interpolate(this.x, other.x, step),
+                _interpolate(this.y, other.y, step)];
+    },
+
+    interpScale : function(other, step) {
+        return [_interpolate(this.scaleX, other.scaleX, step),
+                _interpolate(this.scaleY, other.scaleY, step)];
+    }
+};
+
 
 function WindowClone(realWindow) {
     this._init(realWindow);
@@ -66,8 +110,13 @@ WindowClone.prototype = {
         this.origX = realWindow.x;
         this.origY = realWindow.y;
 
+        this._title = null;
+
         this.actor.connect('button-release-event',
                            Lang.bind(this, this._onButtonRelease));
+
+        this.actor.connect('scroll-event',
+                           Lang.bind(this, this._onScroll));
 
         this.actor.connect('enter-event',
                            Lang.bind(this, this._onEnter));
@@ -79,6 +128,18 @@ WindowClone.prototype = {
         this._draggable.connect('drag-begin', Lang.bind(this, this._onDragBegin));
         this._draggable.connect('drag-end', Lang.bind(this, this._onDragEnd));
         this._inDrag = false;
+    },
+
+    setVisibleWithChrome: function(visible) {
+        if (visible) {
+            this.actor.show();
+            if (this._title)
+                this._title.show();
+        } else {
+            this.actor.hide();
+            if (this._title)
+                this._title.hide();
+        }
     },
 
     destroy: function () {
@@ -106,12 +167,103 @@ WindowClone.prototype = {
             return;
 
         this._havePointer = false;
-
-        if (Tweener.isTweening(this.actor))
-            return;
-
-    	actor.raise(this.stackAbove);
         this._updateTitle();
+
+        if (this._zoomStep)
+            this._zoomEnd();
+    },
+
+    _onScroll : function (actor, event) {
+        let direction = event.get_scroll_direction();
+        if (direction == Clutter.ScrollDirection.UP) {
+            if (this._zoomStep == undefined)
+                this._zoomStart();
+            if (this._zoomStep < 100) {
+                this._zoomStep += SCROLL_SCALE_AMOUNT;
+                this._zoomUpdate();
+            }
+        } else if (direction == Clutter.ScrollDirection.DOWN) {
+            if (this._zoomStep > 0) {
+                this._zoomStep -= SCROLL_SCALE_AMOUNT;
+                this._zoomStep = Math.max(0, this._zoomStep);
+                this._zoomUpdate();
+            }
+            if (this._zoomStep <= 0.0)
+                this._zoomEnd();
+        }
+
+    },
+
+    _zoomUpdate : function () {
+        [this.actor.x, this.actor.y] = this._zoomGlobalOrig.interpPosition(this._zoomTarget, this._zoomStep / 100);
+        [this.actor.scale_x, this.actor.scale_y] = this._zoomGlobalOrig.interpScale(this._zoomTarget, this._zoomStep / 100);
+
+        let [width, height] = this.actor.get_transformed_size();
+
+        this.actor.x = _clamp(this.actor.x, 0, global.screen_width  - width);
+        this.actor.y = _clamp(this.actor.y, Panel.PANEL_HEIGHT, global.screen_height - height);
+    },
+
+    _zoomStart : function () {
+        this._zoomOverlay = new Clutter.Rectangle({ reactive: true,
+                                                    color: LIGHTBOX_COLOR,
+                                                    border_width: 0,
+                                                    x: 0,
+                                                    y: 0,
+                                                    width: global.screen_width,
+                                                    height: global.screen_height,
+                                                    opacity: 0 });
+        this._zoomOverlay.show();
+        global.stage.add_actor(this._zoomOverlay);
+        Tweener.addTween(this._zoomOverlay,
+                         { opacity: 255,
+                           time: ZOOM_OVERLAY_FADE_TIME,
+                           transition: "easeOutQuad"
+                         });
+
+        this._zoomLocalOrig  = new ScaledPoint(this.actor.x, this.actor.y, this.actor.scale_x, this.actor.scale_y);
+        this._zoomGlobalOrig = new ScaledPoint();
+        let parent = this._origParent = this.actor.get_parent();
+        [width, height] = this.actor.get_transformed_size();
+        this._zoomGlobalOrig.setPosition.apply(this._zoomGlobalOrig, this.actor.get_transformed_position());
+        this._zoomGlobalOrig.setScale(width / this.actor.width, height / this.actor.height);
+
+        this._zoomOverlay.raise_top();
+        this._zoomOverlay.show();
+
+        this.actor.reparent(global.stage);
+
+        [this.actor.x, this.actor.y]             = this._zoomGlobalOrig.getPosition();
+        [this.actor.scale_x, this.actor.scale_y] = this._zoomGlobalOrig.getScale();
+
+        this.actor.raise_top();
+
+        this._zoomTarget = new ScaledPoint(0, 0, 1.0, 1.0);
+        this._zoomTarget.setPosition(this.actor.x - (this.actor.width - width) / 2, this.actor.y - (this.actor.height - height) / 2);
+        this._zoomStep = 0;
+
+        this._hideEventId = Main.overview.connect('hiding', Lang.bind(this, function () { this._zoomEnd(); }));
+        this._zoomUpdate();
+    },
+
+    _zoomEnd : function () {
+        this.actor.reparent(this._origParent);
+
+        [this.actor.x, this.actor.y]             = this._zoomLocalOrig.getPosition();
+        [this.actor.scale_x, this.actor.scale_y] = this._zoomLocalOrig.getScale();
+
+        this._adjustTitle();
+
+        this._zoomOverlay.destroy();
+        Main.overview.disconnect(this._hideEventId);
+
+        this._zoomLocalPosition  = undefined;
+        this._zoomLocalScale     = undefined;
+        this._zoomGlobalPosition = undefined;
+        this._zoomGlobalScale    = undefined;
+        this._zoomTargetPosition = undefined;
+        this._zoomStep       = undefined;
+        this._zoomOverlay    = undefined;
     },
 
     _onButtonRelease : function (actor, event) {
@@ -233,7 +385,6 @@ DesktopClone.prototype = {
             this.actor = new Clutter.Clone({ source: window.get_texture(),
                                              reactive: true });
         } else {
-            let global = Shell.Global.get();
             this.actor = new Clutter.Rectangle({ color: global.stage.color,
                                                  reactive: true,
                                                  width: global.screen_width,
@@ -265,7 +416,6 @@ function Workspace(workspaceNum, parentActor) {
 Workspace.prototype = {
     _init : function(workspaceNum, parentActor) {
         let me = this;
-        let global = Shell.Global.get();
 
         this.workspaceNum = workspaceNum;
         this._metaWorkspace = global.screen.get_workspace_by_index(workspaceNum);
@@ -281,6 +431,14 @@ Workspace.prototype = {
         this.actor.width = global.screen_width;
         this.actor.height = global.screen_height;
         this.scale = 1.0;
+
+        this._lightbox = new Clutter.Rectangle({ color: LIGHTBOX_COLOR });
+        this.actor.connect('notify::allocation', Lang.bind(this, function () {
+            let [width, height] = this.actor.get_size();
+            this._lightbox.set_size(width, height);
+        }));
+        this.actor.add_actor(this._lightbox);
+        this._lightbox.hide();
 
         let windows = global.get_windows().filter(this._isMyWindow, this);
 
@@ -313,6 +471,9 @@ Workspace.prototype = {
             }
         }
 
+        // A filter for what windows we display
+        this._showOnlyWindows = null;
+
         // Track window changes
         this._windowAddedId = this._metaWorkspace.connect('window-added',
                                                           Lang.bind(this, this._windowAdded));
@@ -328,7 +489,6 @@ Workspace.prototype = {
     },
 
     updateRemovable : function() {
-        let global = Shell.Global.get();
         let removable = (this._windows.length == 1 /* just desktop */ &&
                          this.workspaceNum != 0 &&
                          this.workspaceNum == global.screen.n_workspaces - 1);
@@ -337,8 +497,8 @@ Workspace.prototype = {
             if (this._removeButton)
                 return;
 
-            this._removeButton = new Clutter.Texture({ width: buttonSize,
-                                                       height: buttonSize,
+            this._removeButton = new Clutter.Texture({ width: Overview.addRemoveButtonSize,
+                                                       height: Overview.addRemoveButtonSize,
                                                        reactive: true
                                                      });
             this._removeButton.set_from_file(global.imagedir + "remove-workspace.svg");
@@ -388,6 +548,40 @@ Workspace.prototype = {
         return index < 0 ? null : this._windows[index];
     },
 
+    containsMetaWindow: function (metaWindow) {
+        return this._lookupIndex(metaWindow) >= 0;
+    },
+
+    setShowOnlyWindows: function(showOnlyWindows) {
+        this._showOnlyWindows = showOnlyWindows;
+        this.positionWindows(false);
+    },
+
+    /**
+     * setLightboxMode:
+     * @showLightbox: If true, dim background and allow highlighting a specific window
+     *
+     * This function also resets the highlighted window state.
+     */
+    setLightboxMode: function (showLightbox) {
+        if (showLightbox) {
+            this.setHighlightWindow(null);
+            this._lightbox.show();
+        } else {
+            this._lightbox.hide();
+        }
+    },
+
+    setHighlightWindow: function (metaWindow) {
+        for (let i = 0; i < this._windows.length; i++) {
+            this._windows[i].actor.lower(this._lightbox);
+        }
+        if (metaWindow != null) {
+            let clone = this.lookupCloneForMetaWindow(metaWindow);
+            clone.actor.raise(this._lightbox);
+        }
+    },
+
     _adjustRemoveButton : function() {
         this._removeButton.set_scale(1.0 / this.actor.scale_x,
                                      1.0 / this.actor.scale_y);
@@ -404,7 +598,6 @@ Workspace.prototype = {
 
     // Mark the workspace selected/not-selected
     setSelected : function(selected) {
-        let global = Shell.Global.get();
         // Don't draw a frame if we only have one workspace
         if (selected && global.screen.n_workspaces > 1) {
             if (this._frame)
@@ -440,14 +633,37 @@ Workspace.prototype = {
     // is true, then the workspace is moving at the same time and we need to take
     // that into account
     positionWindows : function(workspaceZooming) {
-        let global = Shell.Global.get();
+        let totalVisible = 0;
 
         for (let i = 1; i < this._windows.length; i++) {
             let clone = this._windows[i];
-            let icon = this._windowIcons[i];
-            clone.stackAbove = this._windows[i - 1].actor;
 
-            let [xCenter, yCenter, fraction] = this._computeWindowPosition(i);
+            if (this._showOnlyWindows != null && !(clone.metaWindow in this._showOnlyWindows))
+                continue;
+
+            totalVisible += 1;
+        }
+
+        let previousWindow = this._windows[0];
+        let visibleIndex = 0;
+        for (let i = 1; i < this._windows.length; i++) {
+            let clone = this._windows[i];
+            let icon = this._windowIcons[i];
+
+            if (this._showOnlyWindows != null && !(clone.metaWindow in this._showOnlyWindows)) {
+                clone.setVisibleWithChrome(false);
+                icon.hide();
+                continue;
+            } else {
+                clone.setVisibleWithChrome(true);
+            }
+
+            clone.stackAbove = previousWindow.actor;
+            previousWindow = clone;
+
+            visibleIndex += 1;
+
+            let [xCenter, yCenter, fraction] = this._computeWindowPosition(visibleIndex, totalVisible);
             xCenter = xCenter * global.screen_width;
             yCenter = yCenter * global.screen_height;
 
@@ -510,6 +726,8 @@ Workspace.prototype = {
         for (let i = 1; i < this._windows.length; i++) {
             let clone = this._windows[i];
             let icon = this._windowIcons[i];
+            if (this._showOnlyWindows != null && !(clone.metaWindow in this._showOnlyWindows))
+                continue;
             this._fadeInWindowIcon(clone, icon);
         }
     },
@@ -522,7 +740,6 @@ Workspace.prototype = {
     },
 
     _windowRemoved : function(metaWorkspace, metaWin) {
-        let global = Shell.Global.get();
         let win = metaWin.get_compositor_private();
 
         // find the position of the window in our list
@@ -674,8 +891,6 @@ Workspace.prototype = {
 
     // Animates the addition of a new (empty) workspace
     slideIn : function(oldScale) {
-        let global = Shell.Global.get();
-
         if (this.gridCol > this.gridRow) {
             this.actor.set_position(global.screen_width, this.gridY);
             this.actor.set_scale(oldScale, oldScale);
@@ -697,7 +912,6 @@ Workspace.prototype = {
     
     // Animates the removal of a workspace
     slideOut : function(onComplete) {
-        let global = Shell.Global.get();
         let destX = this.actor.x, destY = this.actor.y;
 
         this._hideAllIcons();
@@ -724,8 +938,6 @@ Workspace.prototype = {
     },
     
     destroy : function() {
-        let global = Shell.Global.get();
-
         Tweener.removeTweens(this.actor);
         this.actor.destroy();
         this.actor = null;
@@ -747,11 +959,8 @@ Workspace.prototype = {
 
     // Tests if @win should be shown in the Overview
     _isOverviewWindow : function (win) {
-        let wintype = win.get_window_type();
-        if (wintype == Meta.WindowType.DESKTOP || 
-            wintype == Meta.WindowType.DOCK)
-            return false;
-        return !win.is_override_redirect();
+        let appMon = Shell.AppMonitor.get_default()
+        return appMon.is_window_usage_tracked(win.get_meta_window());
     },
 
     _createWindowIcon: function(window) {
@@ -799,10 +1008,10 @@ Workspace.prototype = {
         return clone;
     },
 
-    _computeWindowPosition : function(index) {
+    _computeWindowPosition : function(index, totalWindows) {
         // ignore this._windows[0], which is the desktop
         let windowIndex = index - 1;
-        let numberOfWindows = this._windows.length - 1;
+        let numberOfWindows = totalWindows;
 
         if (numberOfWindows in POSITIONS)
             return POSITIONS[numberOfWindows][windowIndex];
@@ -825,7 +1034,6 @@ Workspace.prototype = {
     },
 
     _removeSelf : function(actor, event) {
-        let global = Shell.Global.get();
         let screen = global.screen;
         let workspace = screen.get_workspace_by_index(this.workspaceNum);
 
@@ -835,8 +1043,6 @@ Workspace.prototype = {
 
     // Draggable target interface
     acceptDrop : function(source, actor, x, y, time) {
-        let global = Shell.Global.get();
-
         if (source instanceof WindowClone) {
             let win = source.realWindow;
             if (this._isMyWindow(win))
@@ -855,9 +1061,9 @@ Workspace.prototype = {
                                                  false, // don't create workspace
                                                  time);
             return true;
-        } else if (source instanceof GenericDisplay.GenericDisplayItem || source instanceof AppDisplay.WellDisplayItem) {
+        } else if (source.shellWorkspaceLaunch) {
             this._metaWorkspace.activate(time);
-            source.launch();
+            source.shellWorkspaceLaunch();
             return true;
         }
 
@@ -867,25 +1073,23 @@ Workspace.prototype = {
 
 Signals.addSignalMethods(Workspace.prototype);
 
-function Workspaces(width, height, x, y, addButtonSize, addButtonX, addButtonY) {
-    this._init(width, height, x, y, addButtonSize, addButtonX, addButtonY);
+function Workspaces(width, height, x, y) {
+    this._init(width, height, x, y);
 }
 
 Workspaces.prototype = {
-    _init : function(width, height, x, y, addButtonSize, addButtonX, addButtonY) {
-        let global = Shell.Global.get();
-
+    _init : function(width, height, x, y) {
         this.actor = new Clutter.Group();
 
-        let screenHeight = global.screen_height;
-          
         this._width = width;
         this._height = height;
         this._x = x;
         this._y = y;
 
         this._workspaces = [];
-        
+
+        this._highlightWindow = null;
+
         let activeWorkspaceIndex = global.screen.get_active_workspace_index();
         let activeWorkspace;
 
@@ -898,17 +1102,7 @@ Workspaces.prototype = {
             }
         }
         activeWorkspace.actor.raise_top();
-        this._positionWorkspaces(global, activeWorkspace);
-
-        // Save the button size as a global variable so we can us it to create 
-        // matching button sizes for workspace remove buttons.
-        buttonSize = addButtonSize;
-
-        // Create (+) button
-        this.addButton = new AddWorkspaceButton(addButtonSize, addButtonX, addButtonY, Lang.bind(this, this._addWorkspaceAcceptDrop));
-        this.addButton.actor.connect('button-release-event', Lang.bind(this, this._appendNewWorkspace));
-        this.actor.add_actor(this.addButton.actor);
-        this.addButton.actor.lower_bottom();
+        this._positionWorkspaces();
 
         let lastWorkspace = this._workspaces[this._workspaces.length - 1];
         lastWorkspace.updateRemovable(true);
@@ -932,6 +1126,14 @@ Workspaces.prototype = {
                                           Lang.bind(this, this._activeWorkspaceChanged));
     },
 
+    _lookupWorkspaceForMetaWindow: function (metaWindow) {
+        for (let i = 0; i < this._workspaces.length; i++) {
+            if (this._workspaces[i].containsMetaWindow(metaWindow))
+                return this._workspaces[i];
+        }
+        return null;
+    },
+
     _lookupCloneForMetaWindow: function (metaWindow) {
         for (let i = 0; i < this._workspaces.length; i++) {
             let clone = this._workspaces[i].lookupCloneForMetaWindow(metaWindow);
@@ -941,9 +1143,41 @@ Workspaces.prototype = {
         return null;
     },
 
+    setHighlightWindow: function (metaWindow) {
+        // Looping over all workspaces is easier than keeping track of the last
+        // highlighted window while trying to handle the window or workspace possibly
+        // going away.
+        for (let i = 0; i < this._workspaces.length; i++) {
+            this._workspaces[i].setHighlightWindow(null);
+        }
+        if (metaWindow != null) {
+            let workspace = this._lookupWorkspaceForMetaWindow(metaWindow);
+            workspace.setHighlightWindow(metaWindow);
+        }
+    },
+
+    // See comments in overview.js
+    setApplicationWindowSelection: function (appId) {
+        let appSys = Shell.AppMonitor.get_default();
+
+        let showOnlyWindows;
+        if (appId) {
+            let windows = appSys.get_windows_for_app(appId);
+            showOnlyWindows = {};
+            for (let i = 0; i < windows.length; i++) {
+                showOnlyWindows[windows[i]] = 1;
+            }
+        } else {
+            showOnlyWindows = null;
+        }
+        for (let i = 0; i < this._workspaces.length; i++) {
+            this._workspaces[i].setLightboxMode(showOnlyWindows != null);
+            this._workspaces[i].setShowOnlyWindows(showOnlyWindows);
+        }
+    },
+
     // Should only be called from active Overview context
     activateWindowFromOverview: function (metaWindow, time) {
-        let global = Shell.Global.get();
         let activeWorkspaceNum = global.screen.get_active_workspace_index();
         let windowWorkspaceNum = metaWindow.get_workspace().index();
 
@@ -959,11 +1193,10 @@ Workspaces.prototype = {
     },
 
     hide : function() {
-        let global = Shell.Global.get();
         let activeWorkspaceIndex = global.screen.get_active_workspace_index();
         let activeWorkspace = this._workspaces[activeWorkspaceIndex];
 
-        this._positionWorkspaces(global, activeWorkspace);
+        this._positionWorkspaces();
         activeWorkspace.actor.raise_top();
 
         for (let w = 0; w < this._workspaces.length; w++)
@@ -971,8 +1204,6 @@ Workspaces.prototype = {
     },
 
     destroy : function() {
-        let global = Shell.Global.get();
-
         for (let w = 0; w < this._workspaces.length; w++)
             this._workspaces[w].destroy();
         this._workspaces = [];
@@ -990,7 +1221,6 @@ Workspaces.prototype = {
 
     // Get the grid position of the active workspace.
     getActiveWorkspacePosition : function() {
-        let global = Shell.Global.get();
         let activeWorkspaceIndex = global.screen.get_active_workspace_index();
         let activeWorkspace = this._workspaces[activeWorkspaceIndex];
 
@@ -1007,12 +1237,7 @@ Workspaces.prototype = {
     // first row.)
     //
     // FIXME: need to make the metacity internal layout agree with this!
-    _positionWorkspaces : function(global, activeWorkspace) {
-        if (!activeWorkspace) {
-            let activeWorkspaceIndex = global.screen.get_active_workspace_index();
-            activeWorkspace = this._workspaces[activeWorkspaceIndex];
-        }
-
+    _positionWorkspaces : function() {
         let gridWidth = Math.ceil(Math.sqrt(this._workspaces.length));
         let gridHeight = Math.ceil(this._workspaces.length / gridWidth);
 
@@ -1050,8 +1275,6 @@ Workspaces.prototype = {
     },
 
     _workspacesChanged : function() {
-        let global = Shell.Global.get();
-
         let oldNumWorkspaces = this._workspaces.length;
         let newNumWorkspaces = global.screen.n_workspaces;
 
@@ -1084,7 +1307,7 @@ Workspaces.prototype = {
         newLastWorkspace.updateRemovable();
 
         // Figure out the new layout
-        this._positionWorkspaces(global);
+        this._positionWorkspaces();
         let newScale = this._workspaces[0].scale;
         let newGridWidth = Math.ceil(Math.sqrt(newNumWorkspaces));
         let newGridHeight = Math.ceil(newNumWorkspaces / newGridWidth);
@@ -1135,39 +1358,10 @@ Workspaces.prototype = {
         this.actor.add_actor(workspace.actor);
     },
 
-    _appendNewWorkspace : function() {
-        let global = Shell.Global.get();
-
-        global.screen.append_new_workspace(false, global.screen.get_display().get_current_time());
-    },
-
-    // Creates a new workspace and drops the dropActor there
-    _addWorkspaceAcceptDrop : function(source, dropActor, x, y, time) {
-        this._appendNewWorkspace();
+    // Handles a drop onto the (+) button; assumes the new workspace
+    // has already been added
+    acceptNewWorkspaceDrop : function(source, dropActor, x, y, time) {
         return this._workspaces[this._workspaces.length - 1].acceptDrop(source, dropActor, x, y, time);
-    }
-};
-
-function AddWorkspaceButton(buttonSize, buttonX, buttonY, acceptDropCallback) {
-    this._init(buttonSize, buttonX, buttonY, acceptDropCallback);
-}
-
-AddWorkspaceButton.prototype = {
-    _init : function(buttonSize, buttonX, buttonY, acceptDropCallback) {
-        this.actor = new Clutter.Texture({ x: buttonX,
-                                           y: buttonY,
-                                           width: buttonSize,
-                                           height: buttonSize,
-                                           reactive: true });
-        this._acceptDropCallback = acceptDropCallback;
-        let global = Shell.Global.get();
-        this.actor._delegate = this;
-        this.actor.set_from_file(global.imagedir + 'add-workspace.svg');
-    },
-
-    // Draggable target interface
-    acceptDrop : function(source, actor, x, y, time) {
-        return this._acceptDropCallback(source, actor, x, y, time);
     }
 };
 

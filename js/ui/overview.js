@@ -73,6 +73,7 @@ const NUMBER_OF_SECTIONS_IN_SEARCH = 2;
 let wideScreen = false;
 let displayGridColumnWidth = null;
 let displayGridRowHeight = null;
+let addRemoveButtonSize = null;
 
 function Overview() {
     this._init();
@@ -81,8 +82,6 @@ function Overview() {
 Overview.prototype = {
     _init : function() {
         let me = this;
-
-        let global = Shell.Global.get();
 
         this._group = new Clutter.Group();
         this._group._delegate = this;
@@ -131,8 +130,6 @@ Overview.prototype = {
     },
 
     _recalculateGridSizes: function () {
-        let global = Shell.Global.get();
-
         wideScreen = (global.screen_width/global.screen_height > WIDE_SCREEN_CUT_OFF_RATIO);
 
         // We divide the screen into an imaginary grid which helps us determine the layout of
@@ -147,8 +144,6 @@ Overview.prototype = {
     },
 
     relayout: function () {
-        let global = Shell.Global.get();
-
         let screenHeight = global.screen_height;
         let screenWidth = global.screen_width;
 
@@ -174,8 +169,8 @@ Overview.prototype = {
         this._dash.sectionArea.height = this._workspacesHeight;
 
         // place the 'Add Workspace' button in the bottom row of the grid
-        this._addButtonSize = Math.floor(displayGridRowHeight * 3/5);
-        this._addButtonX = this._workspacesX + this._workspacesWidth - this._addButtonSize;
+        addRemoveButtonSize = Math.floor(displayGridRowHeight * 3/5);
+        this._addButtonX = this._workspacesX + this._workspacesWidth - addRemoveButtonSize;
         this._addButtonY = screenHeight - Math.floor(displayGridRowHeight * 4/5);
 
         this._backOver.set_position(0, Panel.PANEL_HEIGHT);
@@ -232,7 +227,7 @@ Overview.prototype = {
     // This allows the user to place the item on any workspace.
     handleDragOver : function(source, actor, x, y, time) {
         if (source instanceof GenericDisplay.GenericDisplayItem
-            || source instanceof AppDisplay.WellDisplayItem) {
+            || source instanceof AppDisplay.BaseWellItem) {
             if (this._activeDisplayPane != null)
                 this._activeDisplayPane.close();
             return true;
@@ -271,26 +266,29 @@ Overview.prototype = {
     show : function() {
         if (this.visible)
             return;
-        if (!Main.startModal())
+        if (!Main.beginModal())
             return;
 
         this.visible = true;
         this.animationInProgress = true;
 
-        let global = Shell.Global.get();
-
         this._dash.show();
 
         /* TODO: make this stuff dynamic */
         this._workspaces = new Workspaces.Workspaces(this._workspacesWidth, this._workspacesHeight,
-                                                     this._workspacesX, this._workspacesY,
-                                                     this._addButtonSize, this._addButtonX, this._addButtonY);
+                                                     this._workspacesX, this._workspacesY);
         this._group.add_actor(this._workspaces.actor);
 
         // The workspaces actor is as big as the screen, so we have to raise the dash above it
         // for drag and drop to work.  In the future we should fix the workspaces to not
         // be as big as the screen.
         this._dash.actor.raise(this._workspaces.actor);
+
+        // Create (+) button
+        this._addButton = new AddWorkspaceButton(addRemoveButtonSize, this._addButtonX, this._addButtonY, Lang.bind(this, this._acceptNewWorkspaceDrop));
+        this._addButton.actor.connect('button-release-event', Lang.bind(this, this._addNewWorkspace));
+        this._group.add_actor(this._addButton.actor);
+        this._addButton.actor.raise(this._workspaces.actor);
 
         // All the the actors in the window group are completely obscured,
         // hiding the group holding them while the Overview is displayed greatly
@@ -333,8 +331,6 @@ Overview.prototype = {
     hide : function() {
         if (!this.visible || this._hideInProgress)
             return;
-
-        let global = Shell.Global.get();
 
         this.animationInProgress = true;
         this._hideInProgress = true;
@@ -390,6 +386,31 @@ Overview.prototype = {
          this.hide();
     },
 
+    /**
+     * setHighlightWindow:
+     * @metaWindow: A #MetaWindow
+     *
+     * Draw the user's attention to the given window @metaWindow.
+     */
+    setHighlightWindow: function (metaWindow) {
+        if (this._workspaces)
+            this._workspaces.setHighlightWindow(metaWindow);
+    },
+
+
+    /**
+     * setApplicationWindowSelection:
+     * @appid: Application identifier string
+     *
+     * Enter a mode which shows only the windows owned by the
+     * given application, and allow highlighting of a specific
+     * window with setHighlightWindow().
+     */
+    setApplicationWindowSelection: function (appid) {
+        if (this._workspaces)
+            this._workspaces.setApplicationWindowSelection(appid);
+    },
+
     //// Private methods ////
 
     _showDone: function() {
@@ -402,8 +423,6 @@ Overview.prototype = {
     },
 
     _hideDone: function() {
-        let global = Shell.Global.get();
-
         global.window_group.show();
 
         this._workspaces.destroy();
@@ -418,6 +437,43 @@ Overview.prototype = {
 
         Main.endModal();
         this.emit('hidden');
+    },
+
+    _addNewWorkspace: function() {
+        global.screen.append_new_workspace(false, global.screen.get_display().get_current_time());
+    },
+
+    _acceptNewWorkspaceDrop: function(source, dropActor, x, y, time) {
+        this._addNewWorkspace();
+        return this._workspaces.acceptNewWorkspaceDrop(source, dropActor, x, y, time);
     }
 };
 Signals.addSignalMethods(Overview.prototype);
+
+function AddWorkspaceButton(buttonSize, buttonX, buttonY, acceptDropCallback) {
+    this._init(buttonSize, buttonX, buttonY, acceptDropCallback);
+}
+
+AddWorkspaceButton.prototype = {
+    _init: function(buttonSize, buttonX, buttonY, acceptDropCallback) {
+        this.actor = new Clutter.Group({ x: buttonX,
+                                         y: buttonY,
+                                         width: global.screen_width - buttonX,
+                                         height: global.screen_height - buttonY,
+                                         reactive: true });
+        this.actor._delegate = this;
+        this._acceptDropCallback = acceptDropCallback;
+
+        let plus = new Clutter.Texture({ x: 0,
+                                         y: 0,
+                                         width: buttonSize,
+                                         height: buttonSize });
+        plus.set_from_file(global.imagedir + 'add-workspace.svg');
+        this.actor.add_actor(plus);
+    },
+
+    // Draggable target interface
+    acceptDrop: function(source, actor, x, y, time) {
+        return this._acceptDropCallback(source, actor, x, y, time);
+    }
+};

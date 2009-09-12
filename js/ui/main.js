@@ -3,6 +3,7 @@
 const Clutter = imports.gi.Clutter;
 const Gdk = imports.gi.Gdk;
 const Gio = imports.gi.Gio;
+const GLib = imports.gi.GLib;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
 const Meta = imports.gi.Meta;
@@ -32,7 +33,10 @@ let recorder = null;
 let inModal = false;
 
 function start() {
-    let global = Shell.Global.get();
+    // Add a binding for "global" in the global JS namespace; (gjs
+    // keeps the web browser convention of having that namespace be
+    // called "window".)
+    window.global = Shell.Global.get();
 
     Gio.DesktopAppInfo.set_desktop_env("GNOME");
 
@@ -94,12 +98,13 @@ function start() {
     let display = global.screen.get_display();
     display.connect('overlay-key', Lang.bind(overview, overview.toggle));
     global.connect('panel-main-menu', Lang.bind(overview, overview.toggle));
-    
+
+    global.stage.connect('captured-event', _globalKeyPressHandler);
+
     Mainloop.idle_add(_removeUnusedWorkspaces);
 }
 
 function _relayout() {
-    let global = Shell.Global.get();
     panel.actor.set_size(global.screen_width, Panel.PANEL_HEIGHT);
     overview.relayout();
 }
@@ -110,8 +115,6 @@ function _relayout() {
 // global.get_windows() still returns NULL at the point when start()
 // is called.)
 function _removeUnusedWorkspaces() {
-
-    let global = Shell.Global.get();
 
     let windows = global.get_windows();
     let maxWorkspace = 0;
@@ -134,13 +137,59 @@ function _removeUnusedWorkspaces() {
     return false;
 }
 
+// This function encapsulates hacks to make certain global keybindings
+// work even when we are in one of our modes where global keybindings
+// are disabled with a global grab. (When there is a global grab, then
+// all key events will be delivered to the stage, so ::captured-event
+// on the stage can be used for global keybindings.)
+//
+// We expect to need to conditionally enable just a few keybindings
+// depending on circumstance; the main hackiness here is that we are
+// assuming that keybindings have their default values; really we
+// should be asking Mutter to resolve the key into an action and then
+// base our handling based on the action.
+function _globalKeyPressHandler(actor, event) {
+    if (!inModal)
+        return false;
+
+    let type = event.type();
+
+    if (type == Clutter.EventType.KEY_PRESS) {
+        let symbol = event.get_key_symbol();
+        if (symbol == Clutter.Print) {
+            // We want to be able to take screenshots of the shell at all times
+            let gconf = Shell.GConf.get_default();
+            let command = gconf.get_string("/apps/metacity/keybinding_commands/command_screenshot");
+            if (command != null && command != "") {
+                let [ok, len, args] = GLib.shell_parse_argv(command);
+                let p = new Shell.Process({'args' : args});
+                p.run();
+            }
+
+            return true;
+        }
+    } else if (type == Clutter.EventType.KEY_RELEASE) {
+        let symbol = event.get_key_symbol();
+        if (symbol == Clutter.Super_L || symbol == Clutter.Super_R) {
+            // The super key is the default for triggering the overview, and should
+            // get us out of the overview when we are already in it.
+            if (overview.visible)
+                overview.hide();
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // Used to go into a mode where all keyboard and mouse input goes to
 // the stage. Returns true if we successfully grabbed the keyboard and
 // went modal, false otherwise
-function startModal() {
-    let global = Shell.Global.get();
+function beginModal() {
+    let timestamp = global.screen.get_display().get_current_time();
 
-    if (!global.grab_keyboard())
+    if (!global.begin_modal(timestamp))
         return false;
     global.set_stage_input_mode(Shell.StageInputMode.FULLSCREEN);
 
@@ -150,9 +199,9 @@ function startModal() {
 }
 
 function endModal() {
-    let global = Shell.Global.get();
+    let timestamp = global.screen.get_display().get_current_time();
 
-    global.ungrab_keyboard();
+    global.end_modal(timestamp);
     global.set_stage_input_mode(Shell.StageInputMode.NORMAL);
     inModal = false;
 }
@@ -166,7 +215,6 @@ function createLookingGlass() {
 }
 
 function createAppLaunchContext() {
-    let global = Shell.Global.get();
     let screen = global.screen;
     let display = screen.get_display();
 

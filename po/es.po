@@ -1,0 +1,199 @@
+# Spanish translation of gnome-shell.
+# Copyright (C) 2009 gnome-shell's COPYRIGHT HOLDER
+# This file is distributed under the same license as the gnome-shell package.
+#
+# Jorge González <jorgegonz@svn.gnome.org>, 2009.
+msgid ""
+msgstr ""
+"Project-Id-Version: gnome-shell master\n"
+"Report-Msgid-Bugs-To: http://bugzilla.gnome.org/enter_bug.cgi?product=gnome-"
+"shell&component=general\n"
+"POT-Creation-Date: 2009-09-11 21:48+0000\n"
+"PO-Revision-Date: 2009-09-12 14:40+0200\n"
+"Last-Translator: Jorge González <jorgegonz@svn.gnome.org>\n"
+"Language-Team: Español <gnome-es-list@gnome.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: ../data/gnome-shell.desktop.in.in.h:1
+msgid "GNOME Shell"
+msgstr "GNOME Shell"
+
+#: ../data/gnome-shell.desktop.in.in.h:2
+msgid "Window management and application launching"
+msgstr "Gestión de ventanas e inicio de aplicaciones"
+
+#. left side
+#: ../js/ui/panel.js:269
+msgid "Activities"
+msgstr "Actividades"
+
+#. Translators: This is a time format.
+#: ../js/ui/panel.js:452
+msgid "%a %l:%M %p"
+msgstr "%a %H:%M"
+
+#: ../js/ui/dash.js:283
+msgid "Find..."
+msgstr "Buscar…"
+
+#: ../js/ui/dash.js:400
+msgid "Browse"
+msgstr "Examine"
+
+#: ../js/ui/dash.js:536
+msgid "(see all)"
+msgstr "(ver todo)"
+
+#. **** Applications ****
+#: ../js/ui/dash.js:736 ../js/ui/dash.js:792
+msgid "APPLICATIONS"
+msgstr "APLICACIONES"
+
+#. **** Places ****
+#. Translators: This is in the sense of locations for documents,
+#. network locations, etc.
+#: ../js/ui/dash.js:756
+msgid "PLACES"
+msgstr "LUGARES"
+
+#. **** Documents ****
+#: ../js/ui/dash.js:763 ../js/ui/dash.js:802
+msgid "RECENT DOCUMENTS"
+msgstr "DOCUMENTOS RECIENTES"
+
+#. **** Search Results ****
+#: ../js/ui/dash.js:782 ../js/ui/dash.js:907
+msgid "SEARCH RESULTS"
+msgstr "RESULTADOS DE LA BÚSQUEDA"
+
+#: ../js/ui/dash.js:797
+msgid "PREFERENCES"
+msgstr "PREFERENCIAS"
+
+#: ../js/ui/runDialog.js:90
+msgid "Please enter a command:"
+msgstr "Introduzca un comando:"
+
+#: ../src/shell-global.c:799
+msgid "Less than a minute ago"
+msgstr "Hace menos de un minuto"
+
+#: ../src/shell-global.c:802
+#, c-format
+msgid "%d minute ago"
+msgid_plural "%d minutes ago"
+msgstr[0] "Hace %d minuto"
+msgstr[1] "Hace %d minutos"
+
+#: ../src/shell-global.c:805
+#, c-format
+msgid "%d hour ago"
+msgid_plural "%d hours ago"
+msgstr[0] "Hace %d hora"
+msgstr[1] "Hace %d horas"
+
+#: ../src/shell-global.c:808
+#, c-format
+msgid "%d day ago"
+msgid_plural "%d days ago"
+msgstr[0] "Hace %d día"
+msgstr[1] "Hace %d días"
+
+#: ../src/shell-global.c:811
+#, c-format
+msgid "%d week ago"
+msgid_plural "%d weeks ago"
+msgstr[0] "Hace %d semana"
+msgstr[1] "Hace %d semanas"
+
+#: ../src/shell-status-menu.c:156
+msgid "Unknown"
+msgstr "Desconocido"
+
+#: ../src/shell-status-menu.c:212
+#, c-format
+msgid "Can't lock screen: %s"
+msgstr "No se puede bloquear la pantalla: %s"
+
+#: ../src/shell-status-menu.c:227
+#, c-format
+msgid "Can't temporarily set screensaver to blank screen: %s"
+msgstr ""
+"No se puede establecer temporalmente el salvapantallas a oscurecer pantalla: "
+"%s"
+
+#: ../src/shell-status-menu.c:351
+#, c-format
+msgid "Can't logout: %s"
+msgstr "No se puede salir de la sesión: %s"
+
+#: ../src/shell-status-menu.c:492
+msgid "Account Information..."
+msgstr "Información de la cuenta…"
+
+#: ../src/shell-status-menu.c:502
+msgid "Sidebar"
+msgstr "Barra lateral"
+
+#: ../src/shell-status-menu.c:510
+msgid "System Preferences..."
+msgstr "Preferencias del sistema…"
+
+#: ../src/shell-status-menu.c:525
+msgid "Lock Screen"
+msgstr "Bloquear la pantalla"
+
+#: ../src/shell-status-menu.c:535
+msgid "Switch User"
+msgstr "Cambiar de usuario"
+
+#. Only show switch user if there are other users
+#. Log Out
+#: ../src/shell-status-menu.c:546
+msgid "Log Out..."
+msgstr "Salir…"
+
+#. Shut down
+#: ../src/shell-status-menu.c:557
+msgid "Shut Down..."
+msgstr "Apagar…"
+
+#: ../src/shell-uri-util.c:87
+msgid "Home Folder"
+msgstr "Carpeta personal"
+
+#. Translators: this is the same string as the one found in
+#. * nautilus
+#: ../src/shell-uri-util.c:102
+msgid "File System"
+msgstr "Sistema de archivos"
+
+#: ../src/shell-uri-util.c:248
+msgid "Search"
+msgstr "Buscar"
+
+#. Translators: the first string is the name of a gvfs
+#. * method, and the second string is a path. For
+#. * example, "Trash: some-directory". It means that the
+#. * directory called "some-directory" is in the trash.
+#.
+#: ../src/shell-uri-util.c:298
+#, c-format
+msgid "%1$s: %2$s"
+msgstr "%1$s: %2$s"
+
+#~ msgid "Find apps or documents"
+#~ msgstr "Encuentre aplicaciones o documentos"
+
+#~| msgid "RECENT DOCUMENTS"
+#~ msgid "DOCUMENTS"
+#~ msgstr "DOCUMENTOS"
+
+#~ msgid "Manager"
+#~ msgstr "Gestor"
+
+#~ msgid "The user manager object this user is controlled by."
+#~ msgstr "El objeto de gestión de usuarios que controla a este usuario."

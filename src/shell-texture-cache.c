@@ -770,6 +770,108 @@ out:
   g_free (data);
 }
 
+typedef struct {
+  ShellTextureCache *cache;
+  ClutterTexture *texture;
+  GObject *source;
+  guint notify_signal_id;
+  gboolean weakref_active;
+} ShellTextureCachePropertyBind;
+
+static void
+shell_texture_cache_reset_texture (ShellTextureCachePropertyBind *bind, const char *propname)
+{
+  GdkPixbuf *pixbuf;
+  CoglHandle texdata;
+
+  g_object_get (bind->source, propname, &pixbuf, NULL);
+
+  g_return_if_fail (pixbuf == NULL || GDK_IS_PIXBUF (pixbuf));
+
+  if (pixbuf != NULL)
+    {
+      texdata = pixbuf_to_cogl_handle (pixbuf);
+      g_object_unref (pixbuf);
+
+      clutter_texture_set_cogl_texture (bind->texture, texdata);
+      cogl_handle_unref (texdata);
+
+      clutter_actor_set_opacity (CLUTTER_ACTOR (bind->texture), 255);
+    }
+  else
+    clutter_actor_set_opacity (CLUTTER_ACTOR (bind->texture), 0);
+}
+
+static void
+shell_texture_cache_on_pixbuf_notify (GObject           *object,
+                                      GParamSpec        *paramspec,
+                                      gpointer           data)
+{
+  ShellTextureCachePropertyBind *bind = data;
+  shell_texture_cache_reset_texture (bind, paramspec->name);
+}
+
+static void
+shell_texture_cache_bind_weak_notify (gpointer     data,
+                                      GObject     *source_location)
+{
+  ShellTextureCachePropertyBind *bind = data;
+  bind->weakref_active = FALSE;
+  g_signal_handler_disconnect (bind->source, bind->notify_signal_id);
+}
+
+static void
+shell_texture_cache_free_bind (gpointer data)
+{
+  ShellTextureCachePropertyBind *bind = data;
+  if (bind->weakref_active)
+    g_object_weak_unref (G_OBJECT(bind->texture), shell_texture_cache_bind_weak_notify, bind);
+  g_free (bind);
+}
+
+/**
+ * shell_texture_cache_bind_pixbuf_property:
+ * @cache:
+ * @object: A #GObject with a property @property_name of type #GdkPixbuf
+ * @property_name: Name of a property
+ *
+ * Create a #ClutterTexture which tracks the #GdkPixbuf value of a GObject property
+ * named by @property_name.  Unlike other methods in ShellTextureCache, the underlying
+ * CoglHandle is not shared by default with other invocations to this method.
+ *
+ * If the source object is destroyed, the texture will continue to show the last
+ * value of the property.
+ *
+ * Return value: (transfer none): A new #ClutterActor
+ */
+ClutterActor *
+shell_texture_cache_bind_pixbuf_property (ShellTextureCache *cache,
+                                          GObject           *object,
+                                          const char        *property_name)
+{
+  ClutterTexture *texture;
+  gchar *notify_key;
+  ShellTextureCachePropertyBind *bind;
+
+  texture = CLUTTER_TEXTURE (clutter_texture_new ());
+
+  bind = g_new0 (ShellTextureCachePropertyBind, 1);
+  bind->cache = cache;
+  bind->texture = texture;
+  bind->source = object;
+  g_object_weak_ref (G_OBJECT (texture), shell_texture_cache_bind_weak_notify, bind);
+  bind->weakref_active = TRUE;
+
+  shell_texture_cache_reset_texture (bind, property_name);
+
+  notify_key = g_strdup_printf ("notify::%s", property_name);
+  bind->notify_signal_id = g_signal_connect_data (object, notify_key, G_CALLBACK(shell_texture_cache_on_pixbuf_notify),
+                                                  bind, (GClosureNotify)shell_texture_cache_free_bind, 0);
+  g_free (notify_key);
+
+  return CLUTTER_ACTOR(texture);
+}
+
 /**
  * shell_texture_cache_load_gicon:
  *
@@ -1094,47 +1196,73 @@ shell_texture_cache_load_recent_thumbnail (ShellTextureCache *cache,
 /**
  * shell_texture_cache_evict_thumbnail:
  * @cache:
- * @size: Size in pixels
  * @uri: Source URI
  *
- * Removes the reference the shell_texture_cache_load_thumbnail() function
- * created for a thumbnail.
+ * Removes all references added by shell_texture_cache_load_thumbnail() function
+ * created for the given URI.
  */
 void
 shell_texture_cache_evict_thumbnail (ShellTextureCache *cache,
-                                     int                size,
                                      const char        *uri)
 {
-  CacheKey key;
+  GHashTableIter iter;
+  gpointer key, value;
 
-  memset (&key, 0, sizeof(key));
-  key.size = size;
-  key.thumbnail_uri = (char*)uri;
+  g_hash_table_iter_init (&iter, cache->priv->keyed_cache);
 
-  g_hash_table_remove (cache->priv->keyed_cache, &key);
+  while (g_hash_table_iter_next (&iter, &key, &value))
+    {
+      CacheKey *cachekey = key;
+
+      if (cachekey->thumbnail_uri == NULL || strcmp (cachekey->thumbnail_uri, uri) != 0)
+        continue;
+
+      g_hash_table_iter_remove (&iter);
+    }
 }
 
 /**
  * shell_texture_cache_evict_recent_thumbnail:
  * @cache:
- * @size: Size in pixels
  * @info: A recent info
  *
- * Removes the reference the shell_texture_cache_load_recent_thumbnail() function
- * created for a thumbnail.
+ * Removes all references added by shell_texture_cache_load_recent_thumbnail() function
+ * for the URI associated with the given @info.
  */
 void
 shell_texture_cache_evict_recent_thumbnail (ShellTextureCache *cache,
-                                            int                size,
                                             GtkRecentInfo     *info)
 {
-  CacheKey key;
+  shell_texture_cache_evict_thumbnail (cache, gtk_recent_info_get_uri (info));
+}
 
-  memset (&key, 0, sizeof(key));
-  key.size = size;
-  key.thumbnail_uri = (char*)gtk_recent_info_get_uri (info);
+static size_t
+pixbuf_byte_size (GdkPixbuf *pixbuf)
+{
+  /* This bit translated from gtk+/gdk-pixbuf/gdk-pixbuf.c:gdk_pixbuf_copy.  The comment
+   * there was:
+   *
+   * Calculate a semi-exact size.  Here we copy with full rowstrides;
+   * maybe we should copy each row individually with the minimum
+   * rowstride?
+   */
+  return (gdk_pixbuf_get_height (pixbuf) - 1) * gdk_pixbuf_get_rowstride (pixbuf) +
+    + gdk_pixbuf_get_width (pixbuf) * ((gdk_pixbuf_get_n_channels (pixbuf)* gdk_pixbuf_get_bits_per_sample (pixbuf) + 7) / 8);
+}
 
-  g_hash_table_remove (cache->priv->keyed_cache, &key);
+/**
+ * shell_texture_cache_pixbuf_equal:
+ *
+ * Returns: %TRUE iff the given pixbufs are bytewise-equal
+ */
+gboolean
+shell_texture_cache_pixbuf_equal (ShellTextureCache *cache, GdkPixbuf *a, GdkPixbuf *b)
+{
+  size_t size_a = pixbuf_byte_size (a);
+  size_t size_b = pixbuf_byte_size (b);
+  if (size_a != size_b)
+    return FALSE;
+  return memcmp (gdk_pixbuf_get_pixels (a), gdk_pixbuf_get_pixels (b), size_a) == 0;
 }
 
 static ShellTextureCache *instance = NULL;

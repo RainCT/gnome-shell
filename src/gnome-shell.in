@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!@PYTHON@
 
 import atexit
 import optparse
@@ -13,44 +13,6 @@ import tempfile
 import termios
 import time
 import errno
-import dbus
-
-def find_cmd (cmd_list):
-    """
-    Takes a list of command candidates and returns the first one that exists.
-    Raises a system exit if none of the commands exist.
-    """
-    for cmd in cmd_list:
-        if os.path.exists(cmd):
-            return cmd
-    
-    raise SystemExit("None of the commands %s exist" % cmd_list)
-    
-def pidof(command):
-    pidof_cmd = find_cmd(["/sbin/pidof", "/bin/pidof", "/usr/bin/pidof"])
-    pidof = subprocess.Popen([pidof_cmd, command], stdout=subprocess.PIPE)
-    pids = pidof.communicate()[0].split()
-    pidof.wait()
-
-    # pidof doesn't have a "current user only" option, so we may have
-    # gotten the pids of other users' processes. Fix that.
-    for pid in pids:
-        try:
-            os.kill(int(pid), 0)
-            return pid
-        except Exception, e:
-            pass
-    return None
-
-def kill_gnome_panel(pid):
-    if options.verbose:
-        print "Terminating panel process %s" % pid
-    devnull = open("/dev/null", "w")
-    subprocess.call(["gdb", "-batch-silent",
-                     "-ex", "call panel_session_do_not_restart()",
-                     "-ex", "call exit(0)",
-                     "-p", pid], stdout=devnull, stderr=devnull)
-    devnull.close()
 
 def start_xephyr():
     tmpdir = tempfile.mkdtemp("", "gnome-shell.")
@@ -190,11 +152,47 @@ def start_shell():
     else:
         args = []
         
-    args.extend(['mutter', '--mutter-plugins=' + plugin, '--replace'])
+    args.extend(['mutter', '--mutter-plugins=' + plugin])
+    if options.replace:
+        args.append('--replace')
     if options.sync:
         args.append('--sync')
     return subprocess.Popen(args, env=env)
 
+def restore_gnome():
+    # Do imports lazily to save time and memory
+    import gio
+    import gconf
+
+    # We don't want to start the new gnome-panel in the current
+    # directory; $HOME is better for stuff launched from it
+    os.chdir(os.path.expanduser("~"))
+
+    def launch_component(gconf_path):
+        client = gconf.client_get_default()
+        component = client.get_string(gconf_path)
+
+        if component == None or component == "":
+            return
+
+        # See gnome-session/gsm-util.c:gsm_util_find_desktop_file_for_app_name()
+        # The one difference is that we don't search the autostart directories,
+        # and just search normal application search path. (Gio doesnt' know
+        # how to search the autostart dirs, so we'd have to do that ourselves.)
+        appinfo = None
+        try:
+            appinfo = gio.unix.DesktopAppInfo(component + ".desktop")
+        except:
+            try:
+                appinfo = gio.unix.DesktopAppInfo("gnome-" + component + ".desktop")
+            except:
+                pass
+
+        if appinfo:
+            appinfo.launch()
+
+    launch_component("/desktop/gnome/session/required_components/windowmanager")
+    launch_component("/desktop/gnome/session/required_components/panel")
 
 # Main program
 
@@ -207,6 +205,8 @@ parser.add_option("", "--debug-command", metavar="COMMAND",
                   help="Command to use for debugging (defaults to 'gdb --args')")
 parser.add_option("-v", "--verbose", action="store_true")
 parser.add_option("", "--sync", action="store_true")
+parser.add_option("", "--xephyr", action="store_true",
+                  help="Run a debugging instance inside Xephyr")
 parser.add_option("", "--geometry", metavar="GEOMETRY",
                   help="Specify Xephyr screen geometry",
                   default="1024x768");
@@ -227,27 +227,6 @@ elif options.debug:
 if options.wide:
     options.geometry = "1280x800"
 
-metacity_pid = pidof("metacity")
-compiz_pid = pidof("compiz.real") or pidof("compiz")
-
-# In Gnome 2.26 the panel grabs a dbus name and allows replacement; use that.
-bus = dbus.Interface(dbus.SessionBus().get_object('org.freedesktop.DBus', '/org/freedesktop/DBus'),
-                     'org.freedesktop.DBus')
-names = bus.ListNames()
-gnome_panel_dbus = 'org.gnome.Panel' in names
-if gnome_panel_dbus:
-    gnome_panel_pid = None
-else:
-    gnome_panel_pid = pidof("gnome-panel")
-
-# Run in Xephyr if gnome-panel is already running and the user didn't
-# specify --replace. Otherwise, run fullscreen
-if options.replace:
-    run_in_xephyr = False
-else:
-    run_in_xephyr = (metacity_pid != None or compiz_pid != None or
-        gnome_panel_pid != None)
-
 # Figure out whether or not to use GL_EXT_texture_from_pixmap. By default
 # we use it iff we aren't running Xephyr, but we allow the user to
 # explicitly disable it.
@@ -258,7 +237,7 @@ if 'GNOME_SHELL_DISABLE_TFP' in os.environ and \
     use_tfp = False
 else:
     # tfp does not work correctly in Xephyr
-    use_tfp = not run_in_xephyr
+    use_tfp = not options.xephyr
 
 if options.verbose:
     print "Starting shell"
@@ -268,23 +247,26 @@ if options.debug:
     # later, in case we kill gdb at a bad time
     termattrs = termios.tcgetattr(0);
 
+# We only respawn the previous environment on abnormal exit;
+# for a clean exit, we assume that gnome-shell was replaced with
+# something else.
+normal_exit = False
+
 try:
-    if run_in_xephyr:
-        shell = start_xephyr()
+    shell = None
+    if options.xephyr:
+        xephyr = start_xephyr()
         # This makes us not grab the org.gnome.Panel name
         os.environ['GNOME_SHELL_NO_REPLACE_PANEL'] = '1'
-        start_shell()
+        shell = start_shell()
     else:
-        if gnome_panel_pid is not None:
-            kill_gnome_panel(gnome_panel_pid)
+        xephyr = None
         shell = start_shell()
 
     # Wait for shell to exit
     if options.verbose:
         print "Waiting for shell to exit"
     shell.wait()
-    if options.verbose:
-        print "Shell is dead"
 
 except KeyboardInterrupt, e:
     try:
@@ -292,29 +274,31 @@ except KeyboardInterrupt, e:
     except:
         pass
     shell.wait()
-    if options.verbose:
-        print "Shell killed"
-
 finally:
+    # Clean up Xephyr if it outlived the shell
+    if xephyr:
+        try:
+            os.kill(xephyr.pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+    if shell is None:
+        print "Failed to start shell"
+    elif shell.returncode == 0:
+        normal_exit = True
+        if options.verbose:
+            print "Shell exited normally"
+    elif shell.returncode < 0:
+        # Python has no mapping for strsignal; not worth using
+        # ctypes for this.
+        print "Shell killed with signal %d" % - shell.returncode
+    else:
+        # Normal reason here would be losing connection the X server
+        if options.verbose:
+            print "Shell exited with return code %d" % shell.returncode
+
     if options.debug:
         termios.tcsetattr(0, termios.TCSANOW, termattrs);
 
-    if not run_in_xephyr:
-        # Restart gnome-panel and window manager
-
-        # We don't want to start the new gnome-panel in the current
-        # directory; $HOME is better for stuff launched from it
-        os.chdir(os.path.expanduser("~"))
-
-        if metacity_pid:
-            if options.verbose:
-                print "Restarting Metacity"
-            subprocess.Popen(["/usr/bin/metacity"])
-        elif compiz_pid:
-            if options.verbose:
-                print "Restarting Compiz"
-            subprocess.Popen(["/usr/bin/compiz"])
-        if gnome_panel_dbus or gnome_panel_pid:
-            if options.verbose:
-                print "Restarting gnome-panel"
-            subprocess.Popen(["/usr/bin/gnome-panel"])
+    if not options.xephyr and options.replace and not normal_exit:
+        restore_gnome()

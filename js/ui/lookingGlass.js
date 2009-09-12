@@ -36,7 +36,6 @@ var commandHeader = "const Clutter = imports.gi.Clutter; " +
                     "const Zeitgeist = imports.misc.zeitgeist;" +
                     /* Utility functions...we should probably be able to use these
                      * in the shell core code too. */
-                    "const global = Shell.Global.get(); " +
                     "const stage = global.stage; " +
                     "const color = function(pixel) { let c= new Clutter.Color(); c.from_pixel(pixel); return c; }; " +
                     /* Special lookingGlass functions */
@@ -250,7 +249,6 @@ function Inspector() {
 
 Inspector.prototype = {
     _init: function() {
-        let global = Shell.Global.get();
         let width = 150;
         let eventHandler = new Big.Box({ background_color: LG_BACKGROUND_COLOR,
                                          border: 1,
@@ -275,7 +273,6 @@ Inspector.prototype = {
         }));
 
         eventHandler.connect('button-press-event', Lang.bind(this, function (actor, event) {
-            let global = Shell.Global.get();
             Clutter.ungrab_pointer(eventHandler);
 
             let [stageX, stageY] = event.get_coords();
@@ -289,7 +286,6 @@ Inspector.prototype = {
         }));
 
         eventHandler.connect('motion-event', Lang.bind(this, function (actor, event) {
-            let global = Shell.Global.get();
             let [stageX, stageY] = event.get_coords();
             let target = global.stage.get_actor_at_pos(Clutter.PickMode.ALL,
                                                        stageX,
@@ -313,8 +309,6 @@ function LookingGlass() {
 
 LookingGlass.prototype = {
     _init : function() {
-        let global = Shell.Global.get();
-
         this._idleHistorySaveId = 0;
         let historyPath = global.configdir + "/lookingglass-history.txt";
         this._historyFile = Gio.file_new_for_path(historyPath);
@@ -424,7 +418,7 @@ LookingGlass.prototype = {
             return true;
         }));
         this._entry.connect('key-press-event', Lang.bind(this, function(o, e) {
-            let symbol = Shell.get_event_key_symbol(e);
+            let symbol = e.get_key_symbol();
             if (symbol == Clutter.Escape) {
                 this.close();
                 return true;
@@ -525,8 +519,7 @@ LookingGlass.prototype = {
     },
 
     _resizeTo: function(actor) {
-        let stage = Shell.Global.get().stage;
-        let stageWidth = stage.width;
+        let stage = global.stage;
         let myWidth = stage.width * 0.7;
         let myHeight = stage.height * 0.7;
         let [srcX, srcY] = actor.get_transformed_position();
@@ -556,10 +549,9 @@ LookingGlass.prototype = {
 
         Tweener.removeTweens(this.actor);
 
-        if (!Main.startModal())
+        if (!Main.beginModal())
             return;
 
-        let global = Shell.Global.get();
         global.stage.set_key_focus(this._entry);
 
         Tweener.addTween(this.actor, { time: 0.5,

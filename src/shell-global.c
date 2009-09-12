@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <dbus/dbus-glib.h>
 #include <gio/gio.h>
-#include <glib/gi18n.h>
+#include <glib/gi18n-lib.h>
 #include <math.h>
 #include <X11/extensions/Xfixes.h>
 
@@ -40,7 +40,6 @@ struct _ShellGlobal {
   
   MutterPlugin *plugin;
   ShellWM *wm;
-  gboolean keyboard_grabbed;
   const char *imagedir;
   const char *configdir;
 
@@ -297,47 +296,6 @@ shell_clutter_texture_set_from_pixbuf (ClutterTexture *texture,
 }
 
 /**
- * shell_get_event_key_symbol:
- *
- * Return value: Clutter key value for the key press and release events, 
- *               as specified in clutter-keysyms.h  
- */
-guint16
-shell_get_event_key_symbol(ClutterEvent *event)
-{
-  g_return_val_if_fail(event->type == CLUTTER_KEY_PRESS ||
-                       event->type == CLUTTER_KEY_RELEASE, 0);
-
-  return event->key.keyval;
-}
-
-/**
- * shell_get_button_event_click_count:
- *
- * Return value: click count for button press and release events
- */
-guint16
-shell_get_button_event_click_count(ClutterEvent *event)
-{
-  g_return_val_if_fail(event->type == CLUTTER_BUTTON_PRESS ||
-                       event->type == CLUTTER_BUTTON_RELEASE, 0);
-  return event->button.click_count;
-}
-
-/**
- * shell_get_event_related:
- *
- * Return value: (transfer none): related actor
- */
-ClutterActor *
-shell_get_event_related (ClutterEvent *event)
-{
-  g_return_val_if_fail (event->type == CLUTTER_ENTER ||
-                        event->type == CLUTTER_LEAVE, NULL);
-  return event->crossing.related;
-}
-
-/**
  * shell_global_get:
  *
  * Gets the singleton global object that represents the desktop.
@@ -475,66 +433,66 @@ _shell_global_set_plugin (ShellGlobal  *global,
 }
 
 /**
- * shell_global_grab_keyboard:
+ * shell_global_begin_modal:
  * @global: a #ShellGlobal
  *
- * Grab the keyboard to the stage window. The stage will receive
- * all keyboard events until shell_global_ungrab_keyboard() is called.
- * This is appropriate to do when the desktop goes into a special
- * mode where no normal global key shortcuts or application keyboard
- * processing should happen.
+ * Grabs the keyboard and mouse to the stage window. The stage will
+ * receive all keyboard and mouse events until shell_global_end_modal()
+ * is called. This is used to implement "modes" for the shell, such as the
+ * overview mode or the "looking glass" debug overlay, that block
+ * application and normal key shortcuts.
+ *
+ * Returns value: %TRUE if we succesfully entered the mode. %FALSE if we couldn't
+ *  enter the mode. Failure may occur because an application has the pointer
+ *  or keyboard grabbed, because Mutter is in a mode itself like moving a
+ *  window or alt-Tab window selection, or because shell_global_begin_modal()
+ *  was previouly called.
  */
 gboolean
-shell_global_grab_keyboard (ShellGlobal *global)
+shell_global_begin_modal (ShellGlobal *global,
+                          guint32      timestamp)
 {
-  MetaScreen *screen = mutter_plugin_get_screen (global->plugin);
-  MetaDisplay *display = meta_screen_get_display (screen);
-  Display *xdisplay = meta_display_get_xdisplay (display);
   ClutterStage *stage = CLUTTER_STAGE (mutter_plugin_get_stage (global->plugin));
   Window stagewin = clutter_x11_get_stage_window (stage);
 
-  /* FIXME: we need to coordinate with the rest of Metacity or we
-   * may grab the keyboard away from other portions of Metacity
-   * and leave Metacity in a confused state. An X client is allowed
-   * to overgrab itself, though not allowed to grab they keyboard
-   * away from another applications.
-   */
-  if (global->keyboard_grabbed)
-    return FALSE;
-
-  if (XGrabKeyboard (xdisplay, stagewin,
-                     False, /* owner_events - steal events from the rest of metacity */
-                     GrabModeAsync, GrabModeAsync,
-                     CurrentTime) != Success)
-    return FALSE; /* probably AlreadyGrabbed, some other app has a keyboard grab */
-
-  global->keyboard_grabbed = TRUE;
-
-  return TRUE;
+  return mutter_plugin_begin_modal (global->plugin, stagewin, None, 0, timestamp);
 }
 
 /**
- * shell_global_ungrab_keyboard:
+ * shell_global_end_modal:
  * @global: a #ShellGlobal
  *
- * Undoes the effect of shell_global_grab_keyboard
+ * Undoes the effect of shell_global_begin_modal().
  */
 void
-shell_global_ungrab_keyboard (ShellGlobal *global)
+shell_global_end_modal (ShellGlobal *global,
+                        guint32      timestamp)
 {
-  MetaScreen *screen;
-  MetaDisplay *display;
-  Display *xdisplay;
+  mutter_plugin_end_modal (global->plugin, timestamp);
+}
 
-  g_return_if_fail (global->keyboard_grabbed);
+/**
+ * shell_global_display_is_grabbed
+ * @global: a #ShellGlobal
+ *
+ * Determines whether Mutter currently has a grab (keyboard or mouse or
+ * both) on the display. This could be the result of a current window
+ * management operation like a window move, or could be from
+ * shell_global_begin_modal().
+ *
+ * This function is useful to for ad-hoc checks to avoid over-grabbing
+ * the Mutter grab a grab from GTK+. Longer-term we might instead want a
+ * mechanism to make Mutter use GDK grabs instead of raw XGrabPointer().
+ *
+ * Return value: %TRUE if Mutter has a grab on the display
+ */
+gboolean
+shell_global_display_is_grabbed (ShellGlobal *global)
+{
+  MetaScreen *screen = mutter_plugin_get_screen (global->plugin);
+  MetaDisplay *display = meta_screen_get_display (screen);
 
-  screen = mutter_plugin_get_screen (global->plugin);
-  display = meta_screen_get_display (screen);
-  xdisplay = meta_display_get_xdisplay (display);
-
-  XUngrabKeyboard (xdisplay, CurrentTime);
-
-  global->keyboard_grabbed = FALSE;
+  return meta_display_get_grab_op (display) != META_GRAB_OP_NONE;
 }
 
 /* Code to close all file descriptors before we exec; copied from gspawn.c in GLib.

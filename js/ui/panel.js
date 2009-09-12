@@ -23,7 +23,7 @@ const DEFAULT_PADDING = 4;
 const PANEL_ICON_SIZE = 24;
 
 const BACKGROUND_TOP = new Clutter.Color();
-BACKGROUND_TOP.from_pixel(0x414141ff);
+BACKGROUND_TOP.from_pixel(0x161616ff);
 const BACKGROUND_BOTTOM = new Clutter.Color();
 BACKGROUND_BOTTOM.from_pixel(0x000000ff);
 
@@ -66,7 +66,7 @@ function AppPanelMenu() {
 
 AppPanelMenu.prototype = {
     _init: function() {
-        this._metaDisplay = Shell.Global.get().screen.get_display();
+        this._metaDisplay = global.screen.get_display();
 
         this._focusedApp = null;
         this._activeSequence = null;
@@ -98,12 +98,17 @@ AppPanelMenu.prototype = {
             this.actor.opacity = 192;
         }));
 
-        this._metaDisplay.connect('notify::focus-window', Lang.bind(this, function () {
-            this._sync();
-        }));
-        Shell.AppMonitor.get_default().connect('startup-sequence-changed', Lang.bind(this, function() {
-            this._sync();
-        }));
+        this._metaDisplay.connect('notify::focus-window', Lang.bind(this, this._sync));
+
+        let appMonitor = Shell.AppMonitor.get_default();
+        appMonitor.connect('startup-sequence-changed', Lang.bind(this, this._sync));
+        // For now just resync on application add/remove; this is mainly to handle
+        // cases where the focused window's application changes without the focus
+        // changing.  An example case is how we map Firefox based on the window
+        // title which is a dynamic property.
+        appMonitor.connect('app-added', Lang.bind(this, this._sync));
+        appMonitor.connect('app-removed', Lang.bind(this, this._sync));
+
         this._sync();
     },
 
@@ -163,8 +168,6 @@ function Panel() {
 
 Panel.prototype = {
     _init : function() {
-        let global = Shell.Global.get();
-
 
         this.actor = new Big.Box({ orientation: Big.BoxOrientation.HORIZONTAL
                                  });
@@ -264,25 +267,46 @@ Panel.prototype = {
         /* left side */
 
         this.button = new Button.Button(_("Activities"), PANEL_BUTTON_COLOR, PRESSED_BUTTON_BACKGROUND_COLOR,
-                                        PANEL_FOREGROUND_COLOR, true, DEFAULT_FONT);
-        this.button.button.height = PANEL_HEIGHT;
+                                        PANEL_FOREGROUND_COLOR, DEFAULT_FONT);
+        this.button.actor.height = PANEL_HEIGHT;
 
-        this._leftBox.append(this.button.button, Big.BoxPackFlags.NONE);
+        this._leftBox.append(this.button.actor, Big.BoxPackFlags.NONE);
 
-        let hotCorner = new Clutter.Rectangle({ width: 1,
-                                                height: 1,
-                                                opacity: 0,
-                                                reactive: true });
+        // We use this flag to mark the case where the user has entered the
+        // hot corner and has not left both the hot corner and a surrounding
+        // guard area (the "environs"). This avoids triggering the hot corner
+        // multiple times due to an accidental jitter.
+        this._hotCornerEntered = false;
+
+        this._hotCornerEnvirons = new Clutter.Rectangle({ width: 3,
+                                                          height: 3,
+                                                          opacity: 0,
+                                                          reactive: true });
+
+        this._hotCorner = new Clutter.Rectangle({ width: 1,
+                                                  height: 1,
+                                                  opacity: 0,
+                                                  reactive: true });
+
+        this._hotCornerEnvirons.connect('leave-event',
+                                        Lang.bind(this, this._onHotCornerEnvironsLeft));
+        // Clicking on the hot corner environs should result in the same bahavior
+        // as clicking on the hot corner.
+        this._hotCornerEnvirons.connect('button-release-event',
+                                        Lang.bind(this, this._onHotCornerClicked));
 
         // In addition to being triggered by the mouse enter event, the hot corner
         // can be triggered by clicking on it. This is useful if the user wants to 
         // undo the effect of triggering the hot corner once in the hot corner.
-        hotCorner.connect('enter-event',
-                           Lang.bind(this, this._onHotCornerTriggered));
-        hotCorner.connect('button-release-event',
-                           Lang.bind(this, this._onHotCornerTriggered));
+        this._hotCorner.connect('enter-event',
+                                Lang.bind(this, this._onHotCornerEntered));
+        this._hotCorner.connect('button-release-event',
+                                Lang.bind(this, this._onHotCornerClicked));
+        this._hotCorner.connect('leave-event',
+                                Lang.bind(this, this._onHotCornerLeft));
 
-        this._leftBox.append(hotCorner, Big.BoxPackFlags.FIXED);
+        this._leftBox.append(this._hotCornerEnvirons, Big.BoxPackFlags.FIXED);
+        this._leftBox.append(this._hotCorner, Big.BoxPackFlags.FIXED);
 
         let appMenu = new AppPanelMenu();
         this._leftBox.append(appMenu.actor, Big.BoxPackFlags.NONE);
@@ -348,30 +372,46 @@ Panel.prototype = {
         let statusbutton = new Button.Button(statusbox,
                                              PANEL_BUTTON_COLOR,
                                              PRESSED_BUTTON_BACKGROUND_COLOR,
-                                             PANEL_FOREGROUND_COLOR,
-                                             true);
-        statusbutton.button.height = PANEL_HEIGHT;
-        statusbutton.button.connect('button-press-event', function (b, e) {
-            statusmenu.toggle(e);
-            return false;
+                                             PANEL_FOREGROUND_COLOR);
+        statusbutton.actor.height = PANEL_HEIGHT;
+        statusbutton.actor.connect('button-press-event', function (b, e) {
+            if (e.get_button() == 1 && e.get_click_count() == 1) {
+                statusmenu.toggle(e);
+                // The statusmenu might not pop up if it couldn't get a pointer grab
+                if (statusmenu.is_active())
+                    statusbutton.actor.active = true;
+                return true;
+            } else {
+                return false;
+            }
         });
-        this._rightBox.append(statusbutton.button, Big.BoxPackFlags.NONE);
+        this._rightBox.append(statusbutton.actor, Big.BoxPackFlags.NONE);
         // We get a deactivated event when the popup disappears
         this._statusmenu.connect('deactivated', function (sm) {
-            statusbutton.release();
+            statusbutton.actor.active = false;
         });
 
         // TODO: decide what to do with the rest of the panel in the Overview mode (make it fade-out, become non-reactive, etc.)
         // We get into the Overview mode on button-press-event as opposed to button-release-event because eventually we'll probably
         // have the Overview act like a menu that allows the user to release the mouse on the activity the user wants
         // to switch to.
-        this.button.button.connect('button-press-event',
-                                   Lang.bind(Main.overview, Main.overview.toggle));
+        this.button.actor.connect('button-press-event', function(b, e) {
+            if (e.get_button() == 1 && e.get_click_count() == 1) {
+                Main.overview.toggle();
+                return true;
+            } else {
+                return false;
+            }
+        });
         // In addition to pressing the button, the Overview can be entered and exited by other means, such as
         // pressing the System key, Alt+F1 or Esc. We want the button to be pressed in when the Overview is entered
         // and to be released when it is exited regardless of how it was triggered.
-        Main.overview.connect('showing', Lang.bind(this.button, this.button.pressIn));
-        Main.overview.connect('hiding', Lang.bind(this.button, this.button.release));
+        Main.overview.connect('showing', Lang.bind(this, function() {
+            this.button.actor.active = true;
+        }));
+        Main.overview.connect('hiding', Lang.bind(this, function() {
+            this.button.actor.active = false;
+        }));
 
         Main.chrome.addActor(this.actor);
         Main.chrome.setVisibleInOverview(this.actor, true);
@@ -414,10 +454,34 @@ Panel.prototype = {
         return false;
     },
 
-    _onHotCornerTriggered : function() {
-        if (!Main.overview.animationInProgress) {
-            Main.overview.toggle();
+    _onHotCornerEntered : function() {
+        if (!this._hotCornerEntered) {
+            this._hotCornerEntered = true;
+            if (!Main.overview.animationInProgress) {
+                Main.overview.toggle();
+            }
         }
         return false;
-     }
+    },
+
+    _onHotCornerClicked : function() {
+         if (!Main.overview.animationInProgress) {
+             Main.overview.toggle();
+         }
+         return false;
+    },
+
+    _onHotCornerLeft : function(actor, event) {
+        if (event.get_related() != this._hotCornerEnvirons) {
+            this._hotCornerEntered = false;
+        }
+        return false;
+    },
+
+    _onHotCornerEnvironsLeft : function(actor, event) {
+        if (event.get_related() != this._hotCorner) {
+            this._hotCornerEntered = false;
+        }
+        return false;
+    }
 };

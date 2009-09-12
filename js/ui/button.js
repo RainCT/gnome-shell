@@ -4,8 +4,8 @@ const Big = imports.gi.Big;
 const Clutter = imports.gi.Clutter;
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
-
 const Shell = imports.gi.Shell;
+const Signals = imports.signals;
 const Tweener = imports.ui.tweener;
 
 const DEFAULT_BUTTON_COLOR = new Clutter.Color();
@@ -22,12 +22,12 @@ const DEFAULT_FONT = 'Sans Bold 16px';
 // Padding on the left and right side of the button.
 const SIDE_PADDING = 14;
 
-function Button(widget, buttonColor, pressedButtonColor, textColor, staysPressed, font) {
-    this._init(widget, buttonColor, pressedButtonColor, textColor, staysPressed, font);
+function Button(widget, buttonColor, pressedButtonColor, textColor, font) {
+    this._init(widget, buttonColor, pressedButtonColor, textColor, font);
 }
 
 Button.prototype = {
-    _init : function(widgetOrText, buttonColor, pressedButtonColor, textColor, staysPressed, font) {
+    _init : function(widgetOrText, buttonColor, pressedButtonColor, textColor, font) {
         let me = this;
 
         this._buttonColor = buttonColor
@@ -42,27 +42,20 @@ Button.prototype = {
         if (textColor == null)
             this._textColor = DEFAULT_TEXT_COLOR;
 
-        this._staysPressed = staysPressed
-        if (staysPressed == null)
-            this._staysPressed = false;
-
         this._font = font;
         if (font == null)
             this._font = DEFAULT_FONT;
 
-        // if this._staysPressed is true, this._active will be true past the first release of a button, until a subsequent one (the button
-        // is unpressed) or until release() is called explicitly
-        this._active = false;
         this._isBetweenPressAndRelease = false;
         this._mouseIsOverButton = false;
 
-        this.button = new Big.Box({ reactive: true,
-                                    corner_radius: 5,
-                                    padding_left: SIDE_PADDING,
-                                    padding_right: SIDE_PADDING,
-                                    orientation: Big.BoxOrientation.HORIZONTAL,
-                                    y_align: Big.BoxAlignment.CENTER
-                                  });
+        this.actor = new Shell.ButtonBox({ reactive: true,
+                                           corner_radius: 5,
+                                           padding_left: SIDE_PADDING,
+                                           padding_right: SIDE_PADDING,
+                                           orientation: Big.BoxOrientation.HORIZONTAL,
+                                           y_align: Big.BoxAlignment.CENTER
+                                         });
         if (typeof widgetOrText == 'string') {
             this._widget = new Clutter.Text({ font_name: this._font,
                                               color: this._textColor,
@@ -71,61 +64,24 @@ Button.prototype = {
             this._widget = widgetOrText;
         }
 
-        this.button.append(this._widget, Big.BoxPackFlags.EXPAND);
+        this.actor.append(this._widget, Big.BoxPackFlags.EXPAND);
 
-        this.button.connect('button-press-event',
-            function(o, event) {
-                me._isBetweenPressAndRelease = true;
-                me.button.backgroundColor = me._pressedButtonColor;
-                return false;
-            });
-        this.button.connect('button-release-event',
-            function(o, event) {
-                me._isBetweenPressAndRelease = false;
-                if (!me._staysPressed || me._active) {
-                    me.release();
-                } else {
-                    me._active = true;
-                }
-                return false;
-            });
-        this.button.connect('enter-event',
-            function(o, event) {
-                me._mouseIsOverButton = true;
-                if (!me._active) {
-                    me.button.backgroundColor = me._buttonColor;
-                }
-                return false;
-            });
-        this.button.connect('leave-event',
-            function(o, event) {
-                me._isBetweenPressAndRelease = false;
-                me._mouseIsOverButton = false;
-                if (!me._active) {
-                    me.button.backgroundColor = null;
-                }
-                return false;
-            });
+        this.actor.connect('notify::hover', Lang.bind(this, this._updateColors));
+        this.actor.connect('notify::pressed', Lang.bind(this, this._updateColors));
+        this.actor.connect('notify::active', Lang.bind(this, this._updateColors));
     },
 
-    pressIn : function() {
-        if (!this._isBetweenPressAndRelease && this._staysPressed) {
-            this._active = true;
-            this.button.backgroundColor = this._pressedButtonColor;
-        }
-    },
-
-    release : function() {
-        if (!this._isBetweenPressAndRelease && this._staysPressed) {
-            this._active = false;
-            if (this._mouseIsOverButton) {
-                this.button.backgroundColor = this._buttonColor;
-            } else {
-                this.button.backgroundColor = null;
-            }
-        }
+    _updateColors : function() {
+        if (this.actor.active || this.actor.pressed)
+            this.actor.backgroundColor = this._pressedButtonColor;
+        else if (this.actor.hover)
+            this.actor.backgroundColor = this._buttonColor;
+        else
+            this.actor.backgroundColor = null;
     }
 };
+
+Signals.addSignalMethods(Button.prototype);
 
 /* Delay before the icon should appear, in seconds after the pointer has entered the parent */
 const ANIMATION_TIME = 0.25;
@@ -152,16 +108,15 @@ iconButton.prototype = {
         this.actor.set_opacity(0);
         parent.connect("enter-event", Lang.bind(this, function(actor, event) {
             this._shouldHide = false;
-
             // Nothing to do if the cursor has come back from a child of the parent actor
-            if (actor.get_children().indexOf(Shell.get_event_related(event)) != -1)
+            if (actor.get_children().indexOf(event.get_related()) != -1)
                 return;
 
             this._fadeIn();
         }));
         parent.connect("leave-event", Lang.bind(this, function(actor, event) {
             // Nothing to do if the cursor has merely entered a child of the parent actor
-            if (actor.get_children().indexOf(Shell.get_event_related(event)) != -1)
+            if (actor.get_children().indexOf(event.get_related()) != -1)
                 return;
 
             // Remember that we should not be visible to hide the button if forceShow is unset

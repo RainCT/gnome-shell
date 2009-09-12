@@ -10,6 +10,23 @@
 # Copyright (C) 2006, 2007, 2008 Imendio AB
 #
 
+# Pre-check on GNOME version
+
+gnome_version=`gnome-session --version 2>/dev/null | (read name version && echo $version)`
+have_gnome_26=false
+case $gnome_version in
+    2.2[6789]*|2.[3456789]*|3.*)
+	have_gnome_26=true
+    ;;
+esac
+
+if $have_gnome_26 ; then : ; else
+   echo "GNOME 2.26 or newer is required to build GNOME Shell" 1>&2
+   exit 1
+fi
+
+############################################################
+
 if which lsb_release > /dev/null 2>&1; then
   system=`lsb_release -is`
 elif [ -f /etc/fedora-release ] ; then
@@ -35,8 +52,9 @@ fi
 # ({mozilla,firefox,xulrunner}-js), xdamage
 #
 # Non-devel packages needed by gnome-shell and its deps:
-# gdb, glxinfo, gstreamer-plugins-base, gstreamer-plugins-good,
-# python, Xephyr, xeyes*, xlogo*, xterm*, zenity
+# glxinfo, gstreamer-plugins-base, gstreamer-plugins-good,
+# python, pygobject, gnome-python (gconf),
+# Xephyr, xeyes*, xlogo*, xterm*, zenity
 #
 # (*)ed packages are only needed because gnome-shell launches them
 # when running in Xephyr mode, and we should probably change it to use
@@ -63,8 +81,8 @@ if test x$system = xUbuntu -o x$system = xDebian ; then
     automake bison flex git-core gnome-common gtk-doc-tools \
     libdbus-glib-1-dev libgconf2-dev libgtk2.0-dev libffi-dev \
     libgnome-menu-dev libgnome-desktop-dev librsvg2-dev libwnck-dev libgl1-mesa-dev \
-    mesa-common-dev mesa-utils python-dev libreadline5-dev xulrunner-dev \
-    xserver-xephyr \
+    libreadline5-dev mesa-common-dev mesa-utils python-dev python-gconf python-gobject \
+    xulrunner-dev xserver-xephyr \
     libgstreamer0.10-dev gstreamer0.10-plugins-base gstreamer0.10-plugins-good \
     ; do
       if ! dpkg_is_installed $pkg; then
@@ -84,11 +102,11 @@ if test x$system = xFedora ; then
     binutils curl gcc make \
     automake bison flex git gnome-common gnome-doc-utils intltool \
     libtool pkgconfig \
-    dbus-glib-devel GConf2-devel gnome-menus-devel gtk2-devel libffi-devel gnome-desktop-devel \
-    librsvg2-devel libwnck-devel mesa-libGL-devel python-devel readline-devel \
-    xulrunner-devel libXdamage-devel \
+    dbus-glib-devel GConf2-devel gnome-menus-devel gnome-python2-gconf gtk2-devel libffi-devel \
+    gnome-desktop-devel librsvg2-devel libwnck-devel mesa-libGL-devel python-devel pygobject2 \
+    readline-devel xulrunner-devel libXdamage-devel \
     gstreamer-devel gstreamer-plugins-base gstreamer-plugins-good \
-    gdb glx-utils xorg-x11-apps xorg-x11-server-Xephyr xterm zenity \
+    glx-utils xorg-x11-apps xorg-x11-server-Xephyr xterm zenity \
     ; do
       if ! rpm -q $pkg > /dev/null 2>&1; then
         reqd="$pkg $reqd"

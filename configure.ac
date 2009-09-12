@@ -1,8 +1,8 @@
-AC_INIT(gnome-shell, 2.27.0)
+AC_INIT(gnome-shell, 2.27.2)
 
 AC_CONFIG_AUX_DIR(config)
 
-AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip])
+AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip foreign])
 AM_MAINTAINER_MODE
 
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])],)
@@ -28,6 +28,10 @@ AM_GLIB_GNU_GETTEXT
 AC_PATH_PROG(GCONFTOOL, gconftool-2, no)
 AM_GCONF_SOURCE_2
 
+# Get a value to substitute into gnome-shell.in
+AM_PATH_PYTHON([2.5])
+AC_SUBST(PYTHON)
+
 # We need at least this, since gst_plugin_register_static() was added
 # in 0.10.16, but nothing older than 0.10.21 has been tested.
 GSTREAMER_MIN_VERSION=0.10.16
@@ -50,7 +54,8 @@ AM_CONDITIONAL(BUILD_RECORDER, $build_recorder)
 PKG_CHECK_MODULES(MUTTER_PLUGIN, gio-unix-2.0 gtk+-2.0 dbus-glib-1 mutter-plugins
                                  gjs-gi-1.0 libgnome-menu $recorder_modules gconf-2.0
                                  gdk-x11-2.0 clutter-x11-1.0 clutter-glx-1.0
-                                 gnome-desktop-2.0 >= 2.26 libstartup-notification-1.0)
+                                 gnome-desktop-2.0 >= 2.26 libstartup-notification-1.0
+                                 gobject-introspection-1.0 >= 0.6.5)
 PKG_CHECK_MODULES(TIDY, clutter-1.0)
 PKG_CHECK_MODULES(BIG, clutter-1.0 gtk+-2.0 librsvg-2.0)
 PKG_CHECK_MODULES(GDMUSER, dbus-glib-1 gtk+-2.0)
